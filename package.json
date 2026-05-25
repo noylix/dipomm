@@ -1,0 +1,17 @@
+{
+  "name": "svoi-ryady-react-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:vendor": "node scripts/sync-vendor.mjs",
+    "check:ui": "node --check static/react-app.js"
+  },
+  "dependencies": {
+    "@fontsource/marmelad": "5.1.1",
+    "bootstrap": "5.3.3",
+    "lucide": "0.468.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
