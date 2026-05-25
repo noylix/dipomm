@@ -1113,6 +1113,7 @@
     function LoginPage({ onBecomeSellerRequest }) {
         return h("div", { className: "react-panel", style: { maxWidth: 520, margin: "0 auto" } }, [
             h("h1", null, "\u0412\u0445\u043e\u0434"),
+            props.password_reset_success && h("p", { className: "alert alert-success" }, "\u041f\u0430\u0440\u043e\u043b\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d. \u0412\u043e\u0439\u0434\u0438\u0442\u0435 \u0441 \u043d\u043e\u0432\u044b\u043c \u043f\u0430\u0440\u043e\u043b\u0435\u043c."),
             props.error && h("p", { className: "alert alert-danger" }, props.error),
             h("form", { action: "/login", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
                 Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
@@ -1120,9 +1121,45 @@
                 h("button", { className: "react-btn", type: "submit" }, "\u0412\u043e\u0439\u0442\u0438")
             ]),
             h("div", { className: "react-stack", style: { marginTop: 16 } }, [
+                h("p", { key: "forgot" }, A({ href: "/forgot-password" }, "\u0417\u0430\u0431\u044b\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c?")),
                 h("p", { key: "buyer" }, ["\u041d\u0435\u0442 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430? ", A({ href: "/register" }, "\u0417\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f")]),
                 h("p", { key: "seller" }, ["\u0425\u043e\u0442\u0438\u0442\u0435 \u043f\u0440\u043e\u0434\u0430\u0432\u0430\u0442\u044c \u043d\u0430 \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0435? ", A({ href: "/become-seller", onClick: onBecomeSellerRequest }, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c")])
             ])
+        ]);
+    }
+    function ForgotPasswordPage() {
+        return h("div", { className: "react-panel", style: { maxWidth: 520, margin: "0 auto" } }, [
+            h("h1", null, "\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c"),
+            h("p", { className: "react-muted" }, "\u0423\u043a\u0430\u0436\u0438\u0442\u0435 email, \u0438 \u043c\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043c \u0441\u0441\u044b\u043b\u043a\u0443 \u0434\u043b\u044f \u0441\u0431\u0440\u043e\u0441\u0430."),
+            props.error && h("p", { className: "alert alert-danger" }, props.error),
+            h("form", { action: "/forgot-password", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
+                Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
+                h("button", { className: "react-btn", type: "submit" }, "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c")
+            ]),
+            h("p", { style: { marginTop: 16 } }, A({ href: "/login" }, "\u0412\u0435\u0440\u043d\u0443\u0442\u044c\u0441\u044f \u043a\u043e \u0432\u0445\u043e\u0434\u0443"))
+        ]);
+    }
+    function ForgotPasswordSentPage() {
+        return h("section", { className: "react-panel react-stack", style: { maxWidth: 640, margin: "0 auto" } }, [
+            h("h1", null, "\u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u043f\u043e\u0447\u0442\u0443"),
+            h("p", null, "\u0415\u0441\u043b\u0438 email \u0435\u0441\u0442\u044c \u0432 \u0441\u0438\u0441\u0442\u0435\u043c\u0435, \u043c\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043b\u0438 \u0441\u0441\u044b\u043b\u043a\u0443 \u0434\u043b\u044f \u0441\u0431\u0440\u043e\u0441\u0430 \u043f\u0430\u0440\u043e\u043b\u044f."),
+            props.mail_sent === false && props.reset_link ? h("p", { className: "react-muted" }, "\u0414\u043b\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0434\u0435\u043c\u043e-\u0441\u0440\u0435\u0434\u044b SMTP \u043d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0441\u044b\u043b\u043a\u0430 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0430 \u043d\u0438\u0436\u0435.") : null,
+            props.reset_link ? ButtonLink({ href: props.reset_link }, "\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c") : null,
+            ButtonLink({ href: "/login", className: "secondary" }, "\u041a\u043e \u0432\u0445\u043e\u0434\u0443")
+        ]);
+    }
+    function ResetPasswordPage() {
+        const canSubmit = Boolean(props.token);
+        return h("div", { className: "react-panel", style: { maxWidth: 520, margin: "0 auto" } }, [
+            h("h1", null, "\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c"),
+            props.error && h("p", { className: "alert alert-danger" }, props.error),
+            canSubmit ? h("form", { action: "/reset-password", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
+                h("input", { name: "token", type: "hidden", value: props.token }),
+                Field({ name: "password", type: "password", placeholder: "\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
+                Field({ name: "password_confirm", type: "password", placeholder: "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u043f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
+                h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
+            ]) : ButtonLink({ href: "/forgot-password" }, "\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u043d\u043e\u0432\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443"),
+            h("p", { style: { marginTop: 16 } }, A({ href: "/login" }, "\u041a\u043e \u0432\u0445\u043e\u0434\u0443"))
         ]);
     }
     function AuthTabs({ active, onBecomeSellerRequest }) {
@@ -2799,6 +2836,9 @@
         favorites: CatalogPage,
         product: ProductPage,
         login: LoginPage,
+        forgot_password: ForgotPasswordPage,
+        forgot_password_sent: ForgotPasswordSentPage,
+        reset_password: ResetPasswordPage,
         register: RegisterPage,
         become_seller: BecomeSellerPage,
         cart: CartPage,

@@ -1,13 +1,16 @@
 import os
 import secrets
 import uuid
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from auth import get_optional_user, check_role, hash_password, verify_password
+from config import APP_BASE_URL, IS_PRODUCTION
 from database import get_db
+from email_utils import send_email, smtp_is_configured
 from models import Notification, User
 
 
@@ -74,6 +77,46 @@ def _create_verification_notification(db: Session, user_id: int, verification_li
     db.commit()
 
 
+def _absolute_url(request: Request, path: str) -> str:
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    base_url = APP_BASE_URL or str(request.base_url).rstrip("/")
+    return f"{base_url}{path}"
+
+
+def _create_password_reset_notification(db: Session, user_id: int, reset_link: str) -> None:
+    db.add(Notification(
+        user_id=user_id,
+        type="email",
+        subject="\u0421\u0431\u0440\u043e\u0441 \u043f\u0430\u0440\u043e\u043b\u044f",
+        body=(
+            "\u0414\u043b\u044f \u0441\u0431\u0440\u043e\u0441\u0430 \u043f\u0430\u0440\u043e\u043b\u044f "
+            f"\u043f\u0435\u0440\u0435\u0439\u0434\u0438\u0442\u0435 \u043f\u043e \u0441\u0441\u044b\u043b\u043a\u0435: {reset_link}"
+        ),
+    ))
+
+
+def _send_password_reset_email(to_email: str, reset_link: str) -> bool:
+    subject = "\u0421\u0431\u0440\u043e\u0441 \u043f\u0430\u0440\u043e\u043b\u044f \u043d\u0430 \u0421\u0432\u043e\u0438 \u0420\u044f\u0434\u044b"
+    body = (
+        "\u0417\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435!\n\n"
+        "\u041c\u044b \u043f\u043e\u043b\u0443\u0447\u0438\u043b\u0438 \u0437\u0430\u043f\u0440\u043e\u0441 "
+        "\u043d\u0430 \u0441\u0431\u0440\u043e\u0441 \u043f\u0430\u0440\u043e\u043b\u044f. "
+        "\u0427\u0442\u043e\u0431\u044b \u0437\u0430\u0434\u0430\u0442\u044c "
+        "\u043d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c, "
+        "\u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u0441\u0441\u044b\u043b\u043a\u0443:\n"
+        f"{reset_link}\n\n"
+        "\u0421\u0441\u044b\u043b\u043a\u0430 \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 1 \u0447\u0430\u0441. "
+        "\u0415\u0441\u043b\u0438 \u0432\u044b \u043d\u0435 \u0437\u0430\u043f\u0440\u0430\u0448\u0438\u0432\u0430\u043b\u0438 "
+        "\u0441\u0431\u0440\u043e\u0441, \u043f\u0440\u043e\u0441\u0442\u043e "
+        "\u043f\u0440\u043e\u0438\u0433\u043d\u043e\u0440\u0438\u0440\u0443\u0439\u0442\u0435 \u044d\u0442\u043e \u043f\u0438\u0441\u044c\u043c\u043e."
+    )
+    try:
+        return send_email(to_email, subject, body)
+    except Exception:
+        return False
+
+
 def _seller_response_context(**kwargs):
     context = {
         "user": None,
@@ -98,7 +141,9 @@ def login_page(request: Request, db: Session = Depends(get_db)):
     if user:
         return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/" if user.role == "admin" else "/", status_code=303)
     return request.app.state.templates.TemplateResponse(
-        request, "login", {"error": None, "user": None}
+        request,
+        "login",
+        {"error": None, "user": None, "password_reset_success": request.session.pop("password_reset_success", False)},
     )
 
 
@@ -130,6 +175,125 @@ def login_submit(
     if user.role == "seller":
         return RedirectResponse("/seller/", status_code=303)
     return RedirectResponse("/", status_code=303)
+
+
+@router.get("/forgot-password")
+def forgot_password_page(request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    if user:
+        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/" if user.role == "admin" else "/", status_code=303)
+    return request.app.state.templates.TemplateResponse(
+        request, "forgot_password", {"error": None, "user": None}
+    )
+
+
+@router.post("/forgot-password")
+def forgot_password_submit(
+    request: Request,
+    email: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    email = (email or "").strip().lower()
+    reset_link = ""
+    mail_sent = False
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        reset_token = secrets.token_urlsafe(32)
+        user.password_reset_token = reset_token
+        user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=1)
+        reset_link = _absolute_url(request, f"/reset-password?token={reset_token}")
+        _create_password_reset_notification(db, user.id, reset_link)
+        mail_sent = _send_password_reset_email(user.email, reset_link)
+        db.commit()
+
+    request.session["password_reset_email"] = email
+    request.session["password_reset_mail_sent"] = mail_sent
+    if reset_link and (not IS_PRODUCTION or not smtp_is_configured()):
+        request.session["password_reset_demo_link"] = reset_link
+    else:
+        request.session.pop("password_reset_demo_link", None)
+    return RedirectResponse("/forgot-password/sent", status_code=303)
+
+
+@router.get("/forgot-password/sent")
+def forgot_password_sent(request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "forgot_password_sent",
+        {
+            "user": user,
+            "email": request.session.pop("password_reset_email", ""),
+            "mail_sent": request.session.pop("password_reset_mail_sent", False),
+            "reset_link": request.session.pop("password_reset_demo_link", ""),
+        },
+    )
+
+
+@router.get("/reset-password")
+def reset_password_page(request: Request, token: str = "", db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.password_reset_token == token).first() if token else None
+    token_valid = bool(user and user.password_reset_expires_at and user.password_reset_expires_at >= datetime.utcnow())
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "reset_password",
+        {
+            "user": None,
+            "token": token if token_valid else "",
+            "error": None if token_valid else "\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0435\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043b\u044c\u043d\u0430 \u0438\u043b\u0438 \u0443\u0441\u0442\u0430\u0440\u0435\u043b\u0430.",
+        },
+    )
+
+
+@router.post("/reset-password")
+def reset_password_submit(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    token = (token or "").strip()
+    user = db.query(User).filter(User.password_reset_token == token).first() if token else None
+    token_valid = bool(user and user.password_reset_expires_at and user.password_reset_expires_at >= datetime.utcnow())
+    if not token_valid:
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "reset_password",
+            {
+                "user": None,
+                "token": "",
+                "error": "\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0435\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043b\u044c\u043d\u0430 \u0438\u043b\u0438 \u0443\u0441\u0442\u0430\u0440\u0435\u043b\u0430.",
+            },
+        )
+    if len(password or "") < 6:
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "reset_password",
+            {
+                "user": None,
+                "token": token,
+                "error": "\u041f\u0430\u0440\u043e\u043b\u044c \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u043d\u0435 \u043a\u043e\u0440\u043e\u0447\u0435 6 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432.",
+            },
+        )
+    if password != password_confirm:
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "reset_password",
+            {
+                "user": None,
+                "token": token,
+                "error": "\u041f\u0430\u0440\u043e\u043b\u0438 \u043d\u0435 \u0441\u043e\u0432\u043f\u0430\u0434\u0430\u044e\u0442.",
+            },
+        )
+
+    user.password_hash = hash_password(password)
+    user.password_reset_token = None
+    user.password_reset_expires_at = None
+    db.commit()
+    request.session.clear()
+    request.session["password_reset_success"] = True
+    return RedirectResponse("/login", status_code=303)
 
 
 @router.get("/register")

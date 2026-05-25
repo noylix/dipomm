@@ -74,6 +74,8 @@ def _migrate_schema():
             for col, ddl in [
                 ("email_verified",   "ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0"),
                 ("verification_token","ALTER TABLE users ADD COLUMN verification_token VARCHAR(255)"),
+                ("password_reset_token", "ALTER TABLE users ADD COLUMN password_reset_token VARCHAR(255)"),
+                ("password_reset_expires_at", "ALTER TABLE users ADD COLUMN password_reset_expires_at DATETIME"),
                 ("full_name",        "ALTER TABLE users ADD COLUMN full_name VARCHAR(255)"),
                 ("farm_name",        "ALTER TABLE users ADD COLUMN farm_name VARCHAR(255)"),
                 ("phone",            "ALTER TABLE users ADD COLUMN phone VARCHAR(50)"),

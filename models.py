@@ -21,6 +21,8 @@ class User(Base):
     # Подтверждение email
     email_verified = Column(Integer, default=0)  # 1 — email подтверждён
     verification_token = Column(String(255), nullable=True)
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_expires_at = Column(DateTime, nullable=True)
 
     # Профиль фермера (заполняется при регистрации seller)
     full_name = Column(String(255), nullable=True)  # ФИО / название хозяйства

@@ -34,6 +34,11 @@ IS_PRODUCTION = APP_ENV in {"prod", "production"}
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "").strip()
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").strip().rstrip("/")
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587") or 587)
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME).strip()
 
 
 def env_flag(name: str, default: bool = False) -> bool:
@@ -44,6 +49,7 @@ def env_flag(name: str, default: bool = False) -> bool:
 
 
 AUTO_SEED_DEMO_DATA = env_flag("APP_SEED_DEMO_DATA", default=not IS_PRODUCTION)
+SMTP_USE_TLS = env_flag("SMTP_USE_TLS", default=True)
 
 if IS_PRODUCTION and not SESSION_SECRET_KEY:
     raise RuntimeError(
