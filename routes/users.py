@@ -1,9 +1,7 @@
-import os
 import secrets
-import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -16,55 +14,6 @@ from models import Notification, User
 
 router = APIRouter(tags=["auth"])
 
-PASSPORT_UPLOAD_DIR = os.path.join("static", "uploads", "passports")
-os.makedirs(PASSPORT_UPLOAD_DIR, exist_ok=True)
-ALLOWED_PASSPORT_EXT = {".jpg", ".jpeg", ".png", ".webp"}
-MAX_PASSPORT_SIZE = 5 * 1024 * 1024
-SUPPLIER_DOC_UPLOAD_DIR = os.path.join("static", "uploads", "supplier_docs")
-os.makedirs(SUPPLIER_DOC_UPLOAD_DIR, exist_ok=True)
-ALLOWED_SUPPLIER_DOC_EXT = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
-
-
-def _save_passport_photo(upload: UploadFile | None) -> tuple[str | None, str | None]:
-    if not upload or not upload.filename:
-        return None, "Загрузите фото паспорта."
-
-    ext = os.path.splitext(upload.filename)[1].lower()
-    if ext not in ALLOWED_PASSPORT_EXT:
-        return None, "Разрешены только JPG, PNG и WEBP."
-
-    content = upload.file.read()
-    if not content:
-        return None, "Не удалось прочитать файл паспорта."
-    if len(content) > MAX_PASSPORT_SIZE:
-        return None, "Размер файла не должен превышать 5 МБ."
-
-    filename = f"{uuid.uuid4().hex}{ext}"
-    full_path = os.path.join(PASSPORT_UPLOAD_DIR, filename)
-    with open(full_path, "wb") as file_obj:
-        file_obj.write(content)
-    return f"/static/uploads/passports/{filename}", None
-
-
-def _save_supplier_document(upload: UploadFile | None) -> tuple[str | None, str | None]:
-    if not upload or not upload.filename:
-        return None, "Загрузите документ регистрации поставщика."
-
-    ext = os.path.splitext(upload.filename)[1].lower()
-    if ext not in ALLOWED_SUPPLIER_DOC_EXT:
-        return None, "Разрешены JPG, PNG, WEBP или PDF."
-
-    content = upload.file.read()
-    if not content:
-        return None, "Не удалось прочитать документ поставщика."
-    if len(content) > MAX_PASSPORT_SIZE:
-        return None, "Размер файла не должен превышать 5 МБ."
-
-    filename = f"{uuid.uuid4().hex}{ext}"
-    full_path = os.path.join(SUPPLIER_DOC_UPLOAD_DIR, filename)
-    with open(full_path, "wb") as file_obj:
-        file_obj.write(content)
-    return f"/static/uploads/supplier_docs/{filename}", None
 
 
 def _create_verification_notification(db: Session, user_id: int, verification_link: str) -> None:
@@ -124,11 +73,9 @@ def _seller_response_context(**kwargs):
         "full_name": "",
         "farm_name": "",
         "phone": "",
-        "inn": "",
-        "supplier_registration_data": "",
-        "supplier_bank_details": "",
         "farm_address": "",
         "farm_description": "",
+        "product_categories": "",
         "error": None,
     }
     context.update(kwargs)
@@ -362,23 +309,17 @@ def become_seller_submit(
     full_name: str = Form(""),
     farm_name: str = Form(""),
     phone: str = Form(""),
-    inn: str = Form(""),
-    supplier_registration_data: str = Form(""),
-    supplier_bank_details: str = Form(""),
     farm_address: str = Form(""),
+    product_categories: str = Form(""),
     farm_description: str = Form(""),
-    passport_photo: UploadFile = File(None),
-    supplier_document: UploadFile = File(None),
     db: Session = Depends(get_db),
 ):
     email = (email or "").strip()
     full_name = (full_name or "").strip()
     farm_name = (farm_name or "").strip()
     phone = (phone or "").strip()
-    inn = (inn or "").strip()
-    supplier_registration_data = (supplier_registration_data or "").strip()
-    supplier_bank_details = (supplier_bank_details or "").strip()
     farm_address = (farm_address or "").strip()
+    product_categories = (product_categories or "").strip()
     farm_description = (farm_description or "").strip()
 
     response_context = _seller_response_context(
@@ -386,10 +327,8 @@ def become_seller_submit(
         full_name=full_name,
         farm_name=farm_name,
         phone=phone,
-        inn=inn,
-        supplier_registration_data=supplier_registration_data,
-        supplier_bank_details=supplier_bank_details,
         farm_address=farm_address,
+        product_categories=product_categories,
         farm_description=farm_description,
     )
 
@@ -397,22 +336,8 @@ def become_seller_submit(
         response_context["error"] = "Пользователь с таким email уже существует"
         return request.app.state.templates.TemplateResponse(request, "become_seller", response_context)
 
-    if not all([full_name, farm_name, phone, inn, farm_address, supplier_registration_data]):
-        response_context["error"] = "Заполните обязательные поля: имя, название фермы, телефон, ИНН и адрес"
-        return request.app.state.templates.TemplateResponse(request, "become_seller", response_context)
-
-    if not (inn.isdigit() and len(inn) in (10, 12)):
-        response_context["error"] = "ИНН должен содержать 10 или 12 цифр"
-        return request.app.state.templates.TemplateResponse(request, "become_seller", response_context)
-
-    passport_photo_url, passport_error = _save_passport_photo(passport_photo)
-    if passport_error:
-        response_context["error"] = passport_error
-        return request.app.state.templates.TemplateResponse(request, "become_seller", response_context)
-
-    supplier_document_url, supplier_doc_error = _save_supplier_document(supplier_document)
-    if supplier_doc_error:
-        response_context["error"] = supplier_doc_error
+    if not all([full_name, farm_name, phone, email, farm_address, product_categories, farm_description]):
+        response_context["error"] = "Заполните обязательные поля заявки."
         return request.app.state.templates.TemplateResponse(request, "become_seller", response_context)
 
     verification_token = secrets.token_urlsafe(32)
@@ -426,15 +351,17 @@ def become_seller_submit(
         full_name=full_name,
         farm_name=farm_name,
         phone=phone,
-        inn=inn,
+        inn=None,
         farm_address=farm_address,
         farm_description=farm_description or None,
-        passport_photo_url=passport_photo_url,
-        supplier_registration_data=supplier_registration_data,
-        supplier_document_url=supplier_document_url,
-        supplier_bank_details=supplier_bank_details or None,
-        seller_application_status="pending",
+        passport_photo_url=None,
+        supplier_registration_data=None,
+        supplier_document_url=None,
+        supplier_bank_details=None,
+        product_categories=product_categories,
+        seller_application_status="new",
         seller_application_rejection_reason=None,
+        seller_application_admin_comment=None,
     )
     db.add(new_user)
     db.commit()
@@ -446,7 +373,7 @@ def become_seller_submit(
     request.session["user_id"] = new_user.id
     request.session["pending_verification"] = verification_link
     request.session["seller_pending_notice"] = (
-        "Анкета отправлена на модерацию. После проверки администратором вы получите доступ к функциям фермера."
+        "Ваша заявка отправлена. Сотрудник платформы свяжется с вами для уточнения данных и подключения к платформе."
     )
     return RedirectResponse("/seller/pending", status_code=303)
 

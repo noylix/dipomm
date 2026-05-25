@@ -31,6 +31,7 @@ class User(Base):
     inn = Column(String(20), nullable=True)
     farm_address = Column(String(500), nullable=True)
     farm_description = Column(String(2000), nullable=True)
+    product_categories = Column(String(1000), nullable=True)
     farm_photo_url = Column(String(500), nullable=True)
     passport_photo_url = Column(String(500), nullable=True)
     supplier_registration_data = Column(String(1000), nullable=True)
@@ -38,6 +39,7 @@ class User(Base):
     supplier_bank_details = Column(String(1000), nullable=True)
     seller_application_status = Column(String(50), default="approved")
     seller_application_rejection_reason = Column(String(2000), nullable=True)
+    seller_application_admin_comment = Column(String(2000), nullable=True)
 
     # Связи
     cart_items = relationship("CartItem", back_populates="user", cascade="all, delete")

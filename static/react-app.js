@@ -108,6 +108,9 @@
     }
     function sellerApplicationStatusText(value) {
         return {
+            new: "\u041d\u043e\u0432\u0430\u044f",
+            in_progress: "\u0412 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
+            waiting_documents: "\u041e\u0436\u0438\u0434\u0430\u044e\u0442\u0441\u044f \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b",
             pending: "\u041d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438",
             approved: "\u041e\u0434\u043e\u0431\u0440\u0435\u043d\u0430",
             rejected: "\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430",
@@ -722,73 +725,22 @@
         ]);
     }
     function SellerApplicationForm({ compact }) {
-        const [previewUrl, setPreviewUrl] = React.useState(props.passport_photo_url || "");
-        const [passportError, setPassportError] = React.useState("");
         const [submitting, setSubmitting] = React.useState(false);
-        React.useEffect(() => {
-            return () => {
-                if (previewUrl && previewUrl.startsWith("blob:")) {
-                    URL.revokeObjectURL(previewUrl);
-                }
-            };
-        }, [previewUrl]);
-        function handlePassportChange(event) {
-            const file = event.target.files && event.target.files[0];
-            if (previewUrl && previewUrl.startsWith("blob:")) {
-                URL.revokeObjectURL(previewUrl);
-            }
-            if (!file) {
-                setPreviewUrl("");
-                setPassportError("");
-                return;
-            }
-            if (!file.type.startsWith("image/")) {
-                event.target.value = "";
-                setPreviewUrl("");
-                setPassportError("\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u0435 \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430.");
-                return;
-            }
-            if (file.size > 5 * 1024 * 1024) {
-                event.target.value = "";
-                setPreviewUrl("");
-                setPassportError("\u0424\u0430\u0439\u043b \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430 \u043d\u0435 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0431\u043e\u043b\u044c\u0448\u0435 5 \u041c\u0411.");
-                return;
-            }
-            setPassportError("");
-            setPreviewUrl(URL.createObjectURL(file));
-        }
         function handleSellerSubmit(event) {
-            if (passportError) {
-                event.preventDefault();
-                return false;
-            }
             setSubmitting(true);
             return handleSubmitOnce(event);
         }
-        return h("form", { action: "/become-seller", method: "post", encType: "multipart/form-data", className: compact ? "react-stack" : "react-form-grid", onSubmit: handleSellerSubmit }, [
+        return h("form", { action: "/become-seller", method: "post", className: compact ? "react-stack" : "react-form-grid", onSubmit: handleSellerSubmit }, [
             Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
             Field({ name: "password", type: "password", placeholder: "\u041f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
-            Field({ name: "full_name", placeholder: "\u0418\u043c\u044f \u0438 \u0444\u0430\u043c\u0438\u043b\u0438\u044f", defaultValue: props.full_name, required: true, maxLength: 255 }),
-            Field({ name: "farm_name", placeholder: "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0444\u0435\u0440\u043c\u044b", defaultValue: props.farm_name, required: true, maxLength: 255 }),
+            Field({ name: "full_name", placeholder: "\u0424\u0418\u041e / \u0438\u043c\u044f \u043f\u0440\u0435\u0434\u0441\u0442\u0430\u0432\u0438\u0442\u0435\u043b\u044f", defaultValue: props.full_name, required: true, maxLength: 255 }),
+            Field({ name: "farm_name", placeholder: "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0445\u043e\u0437\u044f\u0439\u0441\u0442\u0432\u0430", defaultValue: props.farm_name, required: true, maxLength: 255 }),
             Field({ name: "phone", placeholder: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d", defaultValue: props.phone, required: true, maxLength: 50 }),
-            Field({ name: "inn", placeholder: "\u0418\u041d\u041d", defaultValue: props.inn, required: true, pattern: "\\d{10}|\\d{12}", title: "\u0418\u041d\u041d \u0434\u043e\u043b\u0436\u0435\u043d \u0441\u043e\u0434\u0435\u0440\u0436\u0430\u0442\u044c 10 \u0438\u043b\u0438 12 \u0446\u0438\u0444\u0440" }),
-            Field({ name: "supplier_registration_data", placeholder: "\u0415\u0413\u0420\u0418\u041f/\u0415\u0413\u0420\u042e\u041b \u0438\u043b\u0438 \u0434\u0430\u043d\u043d\u044b\u0435 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438", defaultValue: props.supplier_registration_data, required: true, maxLength: 1000 }),
-            Field({ name: "supplier_bank_details", placeholder: "\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b \u0434\u043b\u044f \u0432\u044b\u043f\u043b\u0430\u0442", defaultValue: props.supplier_bank_details, maxLength: 1000 }),
-            Field({ name: "farm_address", placeholder: "\u0420\u0435\u0433\u0438\u043e\u043d \u0438\u043b\u0438 \u0430\u0434\u0440\u0435\u0441 \u0444\u0435\u0440\u043c\u044b", defaultValue: props.farm_address, className: compact ? "" : "wide", required: true, maxLength: 500 }),
-            Textarea({ name: "farm_description", placeholder: "\u041e\u043f\u0438\u0448\u0438\u0442\u0435 \u0444\u0435\u0440\u043c\u0443, \u043f\u0440\u043e\u0434\u0443\u043a\u0446\u0438\u044e \u0438 \u0443\u0441\u043b\u043e\u0432\u0438\u044f \u0440\u0430\u0431\u043e\u0442\u044b", defaultValue: props.farm_description, className: compact ? "" : "wide", rows: compact ? 4 : 5, maxLength: 2000 }),
-            h("div", { className: compact ? "react-stack" : "wide react-stack" }, [
-                h("label", { className: "react-muted" }, "\u0424\u043e\u0442\u043e \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430"),
-                h("input", { name: "passport_photo", type: "file", className: "react-input", accept: "image/*", onChange: handlePassportChange }),
-                h("small", { className: "react-muted" }, "\u0424\u0430\u0439\u043b \u0434\u043e 5 \u041c\u0411, JPG/PNG/WEBP."),
-                previewUrl ? h("img", { src: previewUrl, alt: "\u041f\u0440\u0435\u0432\u044c\u044e \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430", className: "react-passport-preview" }) : null,
-                (passportError || props.error) ? h("p", { className: "alert alert-danger" }, passportError || props.error) : null
-            ]),
-            h("div", { className: compact ? "react-stack" : "wide react-stack" }, [
-                h("label", { className: "react-muted" }, "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430"),
-                h("input", { name: "supplier_document", type: "file", className: "react-input", accept: "image/*,application/pdf" }),
-                h("small", { className: "react-muted" }, "\u0414\u043e\u0433\u043e\u0432\u043e\u0440 \u0443\u0447\u0438\u0442\u044b\u0432\u0430\u0435\u0442 \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u0443\u044e \u043a\u043e\u043c\u0438\u0441\u0441\u0438\u044e \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b 7% \u0441 \u043a\u0430\u0436\u0434\u043e\u0439 \u043f\u0440\u043e\u0434\u0430\u0436\u0438.")
-            ]),
-            h("button", { className: compact ? "react-btn" : "react-btn wide", type: "submit", disabled: submitting || Boolean(passportError) }, submitting ? "\u0418\u0434\u0435\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430..." : "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0437\u0430\u044f\u0432\u043a\u0443")
+            Field({ name: "farm_address", placeholder: "\u0420\u0435\u0433\u0438\u043e\u043d", defaultValue: props.farm_address, className: compact ? "" : "wide", required: true, maxLength: 500 }),
+            Textarea({ name: "product_categories", placeholder: "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u043f\u0440\u043e\u0434\u0443\u043a\u0446\u0438\u0438", defaultValue: props.product_categories, className: compact ? "" : "wide", rows: compact ? 3 : 4, required: true, maxLength: 1000 }),
+            Textarea({ name: "farm_description", placeholder: "\u041a\u0440\u0430\u0442\u043a\u043e\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0445\u043e\u0437\u044f\u0439\u0441\u0442\u0432\u0430", defaultValue: props.farm_description, className: compact ? "" : "wide", rows: compact ? 4 : 5, required: true, maxLength: 2000 }),
+            props.error ? h("p", { className: compact ? "alert alert-danger" : "wide alert alert-danger" }, props.error) : null,
+            h("button", { className: compact ? "react-btn" : "react-btn wide", type: "submit", disabled: submitting }, submitting ? "\u0418\u0434\u0435\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430..." : "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0437\u0430\u044f\u0432\u043a\u0443")
         ]);
     }
     function SellerSignupModal({ open, onClose }) {
@@ -814,7 +766,7 @@
                     h("h2", { id: "seller-signup-title" }, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c"),
                     h("button", { type: "button", className: "react-btn secondary", onClick: onClose }, "\u0417\u0430\u043a\u0440\u044b\u0442\u044c")
                 ]),
-                h("p", { className: "react-modal-text" }, "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u0430\u043d\u043a\u0435\u0442\u0443 \u0444\u0435\u0440\u043c\u0435\u0440\u0430. \u041f\u043e\u0441\u043b\u0435 \u043e\u0434\u043e\u0431\u0440\u0435\u043d\u0438\u044f \u0430\u0434\u043c\u0438\u043d\u043e\u043c \u0432\u044b \u0441\u043c\u043e\u0436\u0435\u0442\u0435 \u0432\u043e\u0439\u0442\u0438 \u0447\u0435\u0440\u0435\u0437 \u043e\u0431\u044b\u0447\u043d\u043e\u0435 \u043e\u043a\u043d\u043e \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0438\u0438."),
+                h("p", { className: "react-modal-text" }, "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043a\u043e\u0440\u043e\u0442\u043a\u0443\u044e \u0437\u0430\u044f\u0432\u043a\u0443. \u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b \u0441\u0432\u044f\u0436\u0435\u0442\u0441\u044f \u0441 \u0432\u0430\u043c\u0438 \u0434\u043b\u044f \u0443\u0442\u043e\u0447\u043d\u0435\u043d\u0438\u044f \u0434\u0430\u043d\u043d\u044b\u0445 \u0438 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f."),
                 props.error && page === "become_seller" ? h("p", { className: "alert alert-danger" }, props.error) : null,
                 h(SellerApplicationForm, { compact: false })
             ])
@@ -1185,19 +1137,20 @@
         return h("div", { className: "react-panel", style: { maxWidth: 820, margin: "0 auto" } }, [
             h(AuthTabs, { active: "seller" }),
             h("h1", null, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c"),
-            h("p", { className: "react-muted" }, "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u0430\u043d\u043a\u0435\u0442\u0443 \u0444\u0435\u0440\u043c\u0435\u0440\u0430. \u041f\u043e\u0441\u043b\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438 \u0430\u0434\u043c\u0438\u043d\u043e\u043c \u0432\u044b \u0441\u043c\u043e\u0436\u0435\u0442\u0435 \u0432\u0445\u043e\u0434\u0438\u0442\u044c \u0447\u0435\u0440\u0435\u0437 \u043e\u0431\u044b\u0447\u043d\u043e\u0435 \u043e\u043a\u043d\u043e \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0438\u0438."),
+            h("p", { className: "react-muted" }, "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043a\u043e\u0440\u043e\u0442\u043a\u0443\u044e \u0437\u0430\u044f\u0432\u043a\u0443. \u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b \u0441\u0432\u044f\u0436\u0435\u0442\u0441\u044f \u0441 \u0432\u0430\u043c\u0438 \u0434\u043b\u044f \u0443\u0442\u043e\u0447\u043d\u0435\u043d\u0438\u044f \u0434\u0430\u043d\u043d\u044b\u0445 \u0438 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f."),
             props.error && h("p", { className: "alert alert-danger" }, props.error),
             h(SellerApplicationForm, { compact: false })
         ]);
     }
     function SellerPendingPage() {
         const status = props.application_status || "pending";
+        const displayStatus = status === "new" ? "pending" : status;
         const rejected = status === "rejected";
         return h("section", { className: "react-panel react-stack", style: { maxWidth: 760, margin: "0 auto" } }, [
             h("h1", null, "\u0410\u043d\u043a\u0435\u0442\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u0430"),
             props.notice_message ? h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35", background: "#f6fbf2" } }, props.notice_message) : null,
             h("div", { className: "react-chip-row" }, [
-                h("span", { className: "react-chip" }, sellerApplicationStatusText(status))
+                h("span", { className: "react-chip" }, sellerApplicationStatusText(displayStatus))
             ]),
             rejected
                 ? h("p", null, "\u0410\u043d\u043a\u0435\u0442\u0430 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430. \u041f\u043e\u0441\u043b\u0435 \u043f\u0440\u0430\u0432\u043e\u043a \u043c\u043e\u0436\u043d\u043e \u043f\u043e\u0432\u0442\u043e\u0440\u043d\u043e \u0441\u0432\u044f\u0437\u0430\u0442\u044c\u0441\u044f \u0441 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u043e\u043c.")
@@ -1417,25 +1370,13 @@
                         Field({ name: "full_name", placeholder: "\u0418\u043c\u044f", defaultValue: seller.full_name || "", maxLength: 255 }),
                         Field({ name: "farm_name", placeholder: "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0444\u0435\u0440\u043c\u044b", defaultValue: seller.farm_name || "", required: true, maxLength: 255 }),
                         Field({ name: "phone", placeholder: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d", defaultValue: seller.phone || "", maxLength: 50 }),
-                        Field({ name: "inn", placeholder: "\u0418\u041d\u041d", defaultValue: seller.inn || "", maxLength: 20 }),
                         Field({ name: "farm_address", placeholder: "\u0420\u0435\u0433\u0438\u043e\u043d / \u0430\u0434\u0440\u0435\u0441", defaultValue: seller.farm_address || "", className: "wide", maxLength: 500 }),
-                        Field({ name: "supplier_registration_data", placeholder: "\u0415\u0413\u0420\u0418\u041f/\u0415\u0413\u0420\u042e\u041b \u0438\u043b\u0438 \u0434\u0430\u043d\u043d\u044b\u0435 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438", defaultValue: seller.supplier_registration_data || "", className: "wide", maxLength: 1000 }),
-                        Textarea({ name: "supplier_bank_details", placeholder: "\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b \u0438 \u0434\u0430\u043d\u043d\u044b\u0435 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430", defaultValue: seller.supplier_bank_details || "", className: "wide", rows: 3, maxLength: 1000 }),
+                        Textarea({ name: "product_categories", placeholder: "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u043f\u0440\u043e\u0434\u0443\u043a\u0446\u0438\u0438", defaultValue: seller.product_categories || "", className: "wide", rows: 3, maxLength: 1000 }),
                         Textarea({ name: "farm_description", placeholder: "\u041e \u0441\u0435\u0431\u0435 \u0438 \u0444\u0435\u0440\u043c\u0435", defaultValue: seller.farm_description || "", className: "wide", maxLength: 2000 }),
                         h("div", { className: "wide" }, [
                             h("label", { className: "react-muted" }, "\u0424\u043e\u0442\u043e \u043f\u0440\u043e\u0444\u0438\u043b\u044f"),
                             seller.farm_photo_url ? h("img", { src: seller.farm_photo_url, alt: "\u0424\u0435\u0440\u043c\u0430", className: "react-passport-preview" }) : null,
                             h("input", { name: "farm_photo", type: "file", className: "react-input wide", accept: "image/*" })
-                        ]),
-                        h("div", { className: "wide" }, [
-                            h("label", { className: "react-muted" }, "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430"),
-                            seller.supplier_document_url ? A({ href: seller.supplier_document_url, target: "_blank", className: "react-btn secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0442\u0435\u043a\u0443\u0449\u0438\u0439 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442") : null,
-                            h("input", { name: "supplier_document", type: "file", className: "react-input wide", accept: "image/*,application/pdf" })
-                        ]),
-                        h("div", { className: "wide" }, [
-                            h("label", { className: "react-muted" }, "\u0424\u043e\u0442\u043e \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430"),
-                            seller.passport_photo_url ? h("img", { src: seller.passport_photo_url, alt: "\u041f\u0430\u0441\u043f\u043e\u0440\u0442", className: "react-passport-preview" }) : null,
-                            h("input", { name: "passport_photo", type: "file", className: "react-input wide", accept: "image/*" })
                         ]),
                         h("button", { className: "react-btn wide", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043f\u0440\u043e\u0444\u0438\u043b\u044c")
                     ])
@@ -2224,7 +2165,8 @@
     }
     function ModerationPage() {
         const pendingProducts = props.pending_products || [];
-        const pendingSellers = props.pending_sellers || [];
+        const farmerApplications = props.farmer_applications || props.pending_sellers || [];
+        const farmerStatusOptions = props.farmer_application_statuses || ["new", "in_progress", "waiting_documents", "approved", "rejected"];
         const [tab, setTab] = React.useState("products");
         return h(React.Fragment, null, [
             h("div", { className: "react-page-title" }, [h("h1", null, "\u041c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u044f")]),
@@ -2250,15 +2192,9 @@
                 h(AdminProductsTable, { products: props.products || [] })
             ]),
             tab === "sellers" && h("section", { className: "react-panel" }, [
-                h("h2", null, "\u0424\u0435\u0440\u043c\u0435\u0440\u044b \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435"),
-                pendingSellers.length ? h("div", { className: "react-stack" }, pendingSellers.map(seller => h("article", { key: seller.id, className: "react-card react-seller-application-card" }, [
+                h("h2", null, "\u0417\u0430\u044f\u0432\u043a\u0438 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432"),
+                farmerApplications.length ? h("div", { className: "react-stack" }, farmerApplications.map(seller => h("article", { key: seller.id, className: "react-card react-seller-application-card" }, [
                     h("div", { className: "react-seller-application-grid" }, [
-                        h("div", { key: "passport", className: "react-stack" }, [
-                            h("b", null, "\u0424\u043e\u0442\u043e \u043f\u0430\u0441\u043f\u043e\u0440\u0442\u0430"),
-                            seller.passport_photo_url
-                                ? h("img", { src: seller.passport_photo_url, alt: "\u041f\u0430\u0441\u043f\u043e\u0440\u0442", className: "react-passport-large" })
-                                : h("span", { className: "react-muted" }, "\u0424\u043e\u0442\u043e \u043d\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043e")
-                        ]),
                         h("div", { key: "info", className: "react-stack" }, [
                             h("div", { className: "react-chip-row" }, [
                                 h("span", { className: "react-chip" }, sellerApplicationStatusText(seller.seller_application_status)),
@@ -2267,29 +2203,24 @@
                             h("div", { className: "react-info-grid" }, [
                                 h("div", { className: "react-card" }, [h("b", null, "\u0424\u0418\u041e"), h("div", null, seller.full_name || "-")]),
                                 h("div", { className: "react-card" }, [h("b", null, "Email"), h("div", null, seller.email || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0444\u0435\u0440\u043c\u044b"), h("div", null, seller.farm_name || "-")]),
+                                h("div", { className: "react-card" }, [h("b", null, "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0445\u043e\u0437\u044f\u0439\u0441\u0442\u0432\u0430"), h("div", null, seller.farm_name || "-")]),
                                 h("div", { className: "react-card" }, [h("b", null, "\u0422\u0435\u043b\u0435\u0444\u043e\u043d"), h("div", null, seller.phone || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "\u0418\u041d\u041d"), h("div", null, seller.inn || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "\u0410\u0434\u0440\u0435\u0441 / \u0440\u0435\u0433\u0438\u043e\u043d"), h("div", null, seller.farm_address || "-")])
+                                h("div", { className: "react-card" }, [h("b", null, "\u0420\u0435\u0433\u0438\u043e\u043d"), h("div", null, seller.farm_address || "-")]),
+                                h("div", { className: "react-card" }, [h("b", null, "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438"), h("div", null, seller.product_categories || "-")])
                             ]),
                             h("div", { className: "react-card" }, [
-                                h("b", null, "\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435"),
+                                h("b", null, "\u041a\u0440\u0430\u0442\u043a\u043e\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435"),
                                 h("p", { className: "react-muted" }, seller.farm_description || "\u041d\u0435\u0442 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f")
                             ]),
                             seller.seller_application_rejection_reason ? h("div", { className: "alert alert-danger" }, seller.seller_application_rejection_reason) : null,
-                            h("div", { className: "react-actions" }, [
-                                h("form", { action: `/admin/user/approve/${seller.id}`, method: "post", className: "react-inline-form", onSubmit: handleSubmitOnce }, [
-                                    h("input", { type: "hidden", name: "approved", value: "1" }),
-                                    h("button", { className: "react-btn", type: "submit" }, "\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c")
-                                ]),
-                                h("form", { action: `/admin/user/approve/${seller.id}`, method: "post", className: "react-inline-form", onSubmit: handleSubmitOnce }, [
-                                    h("input", { type: "hidden", name: "approved", value: "0" }),
-                                    h("button", { className: "react-btn danger", type: "submit" }, "\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c")
-                                ])
+                            h("form", { action: `/admin/farmer-application/${seller.id}/status`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+                                h("select", { name: "status", className: "react-input", defaultValue: seller.seller_application_status || "new" }, farmerStatusOptions.map(status => h("option", { key: status, value: status }, sellerApplicationStatusText(status)))),
+                                Textarea({ name: "comment", placeholder: "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u0430\u0434\u043c\u0438\u043d\u0430", defaultValue: seller.seller_application_admin_comment || seller.seller_application_rejection_reason || "", className: "wide", rows: 3, maxLength: 2000 }),
+                                h("button", { className: "react-btn wide", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u0443\u0441")
                             ])
                         ])
                     ])
-                ]))) : h("div", { className: "react-empty" }, "\u041d\u0435\u0442 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435.")
+                ]))) : h("div", { className: "react-empty" }, "\u0417\u0430\u044f\u0432\u043e\u043a \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
             ])
         ]);
     }

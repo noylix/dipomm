@@ -76,19 +76,27 @@ def _migrate_schema():
                 ("verification_token","ALTER TABLE users ADD COLUMN verification_token VARCHAR(255)"),
                 ("password_reset_token", "ALTER TABLE users ADD COLUMN password_reset_token VARCHAR(255)"),
                 ("password_reset_expires_at", "ALTER TABLE users ADD COLUMN password_reset_expires_at DATETIME"),
+                ("min_order_amount", "ALTER TABLE users ADD COLUMN min_order_amount NUMERIC(10, 2) DEFAULT 0"),
+                ("created_at", "ALTER TABLE users ADD COLUMN created_at DATETIME"),
                 ("full_name",        "ALTER TABLE users ADD COLUMN full_name VARCHAR(255)"),
                 ("farm_name",        "ALTER TABLE users ADD COLUMN farm_name VARCHAR(255)"),
                 ("phone",            "ALTER TABLE users ADD COLUMN phone VARCHAR(50)"),
                 ("inn",              "ALTER TABLE users ADD COLUMN inn VARCHAR(20)"),
                 ("farm_address",     "ALTER TABLE users ADD COLUMN farm_address VARCHAR(500)"),
                 ("farm_description", "ALTER TABLE users ADD COLUMN farm_description VARCHAR(2000)"),
+                ("product_categories", "ALTER TABLE users ADD COLUMN product_categories VARCHAR(1000)"),
                 ("farm_photo_url",   "ALTER TABLE users ADD COLUMN farm_photo_url VARCHAR(500)"),
                 ("passport_photo_url", "ALTER TABLE users ADD COLUMN passport_photo_url VARCHAR(500)"),
+                ("supplier_registration_data", "ALTER TABLE users ADD COLUMN supplier_registration_data VARCHAR(1000)"),
+                ("supplier_document_url", "ALTER TABLE users ADD COLUMN supplier_document_url VARCHAR(500)"),
+                ("supplier_bank_details", "ALTER TABLE users ADD COLUMN supplier_bank_details VARCHAR(1000)"),
                 ("seller_application_status", "ALTER TABLE users ADD COLUMN seller_application_status VARCHAR(50) DEFAULT 'approved'"),
                 ("seller_application_rejection_reason", "ALTER TABLE users ADD COLUMN seller_application_rejection_reason VARCHAR(2000)"),
+                ("seller_application_admin_comment", "ALTER TABLE users ADD COLUMN seller_application_admin_comment VARCHAR(2000)"),
             ]:
                 if col not in cols:
                     conn.execute(text(ddl))
+                    cols.add(col)
             # Тестовые пользователи считаются подтверждёнными
             conn.execute(text("UPDATE users SET email_verified = 1 WHERE email_verified IS NULL OR email_verified = 0"))
             conn.execute(text(
@@ -97,6 +105,20 @@ def _migrate_schema():
                 "WHEN role = 'seller' AND is_approved = 0 THEN 'pending' "
                 "ELSE COALESCE(seller_application_status, 'approved') END "
                 "WHERE seller_application_status IS NULL OR seller_application_status = ''"
+            ))
+            conn.execute(text(
+                "UPDATE users SET seller_application_status = 'new' "
+                "WHERE role = 'seller' AND seller_application_status = 'pending'"
+            ))
+            conn.execute(text(
+                "UPDATE users SET seller_application_status = 'new' "
+                "WHERE role = 'seller' AND is_approved = 0 "
+                "AND seller_application_status IN ('pending', 'approved')"
+            ))
+            conn.execute(text(
+                "UPDATE users SET inn = NULL, passport_photo_url = NULL, supplier_document_url = NULL, "
+                "supplier_registration_data = NULL, supplier_bank_details = NULL "
+                "WHERE role = 'seller'"
             ))
 
     # Миграция transactions
@@ -179,15 +201,24 @@ def _migrate_schema():
                 conn.execute(text("ALTER TABLE complaints ADD COLUMN updated_at DATETIME"))
 
     if "users" in table_names:
+        inspector = inspect(engine)
         cols = {c["name"] for c in inspector.get_columns("users")}
         with engine.begin() as conn:
             for col, ddl in [
                 ("supplier_registration_data", "ALTER TABLE users ADD COLUMN supplier_registration_data VARCHAR(1000)"),
                 ("supplier_document_url", "ALTER TABLE users ADD COLUMN supplier_document_url VARCHAR(500)"),
                 ("supplier_bank_details", "ALTER TABLE users ADD COLUMN supplier_bank_details VARCHAR(1000)"),
+                ("product_categories", "ALTER TABLE users ADD COLUMN product_categories VARCHAR(1000)"),
+                ("seller_application_admin_comment", "ALTER TABLE users ADD COLUMN seller_application_admin_comment VARCHAR(2000)"),
             ]:
                 if col not in cols:
                     conn.execute(text(ddl))
+                    cols.add(col)
+            conn.execute(text(
+                "UPDATE users SET inn = NULL, passport_photo_url = NULL, supplier_document_url = NULL, "
+                "supplier_registration_data = NULL, supplier_bank_details = NULL "
+                "WHERE role = 'seller'"
+            ))
 
 _migrate_schema()
 
@@ -453,8 +484,26 @@ def init_test_data():
             db.commit()
 
         if not db.query(Product).first():
-            seller_obj = db.query(User).filter(User.role == "seller").first()
-            seller_id = seller_obj.id if seller_obj else 1
+            seller_obj = (
+                db.query(User)
+                .filter(User.email == "seller@farm.local", User.role == "seller")
+                .first()
+                or db.query(User)
+                .filter(User.role == "seller", User.seller_application_status == "approved")
+                .first()
+            )
+            if not seller_obj:
+                seller_obj = User(
+                    email="seller@farm.local",
+                    password_hash=hash_password("seller123"),
+                    role="seller",
+                    is_approved=1,
+                    seller_application_status="approved",
+                )
+                db.add(seller_obj)
+                db.commit()
+                db.refresh(seller_obj)
+            seller_id = seller_obj.id
             demo_products = [
                 Product(name="Яблоки сезонные", price=120.0, discount_price=99.0, owner_id=seller_id, category="Фрукты", variety="Гала", weight_per_unit="1 кг", expiration_days=30, has_certificate=1, region="Краснодарский край", stock=50),
                 Product(name="Картофель молодой", price=45.0, discount_price=39.0, owner_id=seller_id, category="Овощи", variety="Невский", weight_per_unit="5 кг", expiration_days=90, has_certificate=0, region="Ленинградская область", stock=200),
@@ -471,7 +520,7 @@ def init_test_data():
                 db.add(product)
             db.commit()
 
-        seller_obj = db.query(User).filter(User.role == "seller").first()
+        seller_obj = db.query(User).filter(User.email == "seller@farm.local", User.role == "seller").first()
         if seller_obj:
             seller_obj.is_approved = 1
             seller_obj.seller_application_status = seller_obj.seller_application_status or "approved"

@@ -20,14 +20,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 FARM_UPLOAD_DIR = os.path.join("static", "uploads", "farms")
 os.makedirs(FARM_UPLOAD_DIR, exist_ok=True)
-PASSPORT_UPLOAD_DIR = os.path.join("static", "uploads", "passports")
-os.makedirs(PASSPORT_UPLOAD_DIR, exist_ok=True)
 CERT_UPLOAD_DIR = FARM_UPLOAD_DIR
 ALLOWED_FARM_EXT = ALLOWED_IMAGE_EXT
-SUPPLIER_DOC_UPLOAD_DIR = os.path.join("static", "uploads", "supplier_docs")
-os.makedirs(SUPPLIER_DOC_UPLOAD_DIR, exist_ok=True)
-ALLOWED_SUPPLIER_DOC_EXT = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
-MAX_PASSPORT_SIZE = 5 * 1024 * 1024
 
 router = APIRouter(prefix="/seller", tags=["seller"])
 
@@ -133,41 +127,6 @@ def _save_certificate_image(upload: UploadFile | None) -> str | None:
         file_obj.write(upload.file.read())
     return f"/static/uploads/farms/{filename}"
 
-
-def _save_supplier_document(upload: UploadFile | None) -> tuple[str | None, str | None]:
-    if not upload or not upload.filename:
-        return None, None
-    ext = os.path.splitext(upload.filename)[1].lower()
-    if ext not in ALLOWED_SUPPLIER_DOC_EXT:
-        return None, "Разрешены JPG, PNG, WEBP или PDF."
-    content = upload.file.read()
-    if not content:
-        return None, "Не удалось прочитать документ поставщика."
-    if len(content) > MAX_PASSPORT_SIZE:
-        return None, "Размер файла не должен превышать 5 МБ."
-    filename = f"{uuid.uuid4().hex}{ext}"
-    full_path = os.path.join(SUPPLIER_DOC_UPLOAD_DIR, filename)
-    with open(full_path, "wb") as file_obj:
-        file_obj.write(content)
-    return f"/static/uploads/supplier_docs/{filename}", None
-
-
-def _save_passport_photo(upload: UploadFile | None) -> tuple[str | None, str | None]:
-    if not upload or not upload.filename:
-        return None, None
-    ext = os.path.splitext(upload.filename)[1].lower()
-    if ext not in ALLOWED_FARM_EXT:
-        return None, "Разрешены только JPG, PNG и WEBP."
-    content = upload.file.read()
-    if not content:
-        return None, "Не удалось прочитать фото паспорта."
-    if len(content) > MAX_PASSPORT_SIZE:
-        return None, "Размер файла не должен превышать 5 МБ."
-    filename = f"{uuid.uuid4().hex}{ext}"
-    full_path = os.path.join(PASSPORT_UPLOAD_DIR, filename)
-    with open(full_path, "wb") as file_obj:
-        file_obj.write(content)
-    return f"/static/uploads/passports/{filename}", None
 
 
 def _restore_order_stock(order: Order) -> None:
@@ -820,15 +779,11 @@ def seller_update_profile(
     request: Request,
     full_name: str = Form(""),
     phone: str = Form(""),
-    inn: str = Form(""),
     farm_name: str = Form(""),
     farm_address: str = Form(""),
+    product_categories: str = Form(""),
     farm_description: str = Form(""),
-    supplier_registration_data: str = Form(""),
-    supplier_bank_details: str = Form(""),
     farm_photo: UploadFile = File(None),
-    passport_photo: UploadFile = File(None),
-    supplier_document: UploadFile = File(None),
     db: Session = Depends(get_db),
 ):
     user = get_optional_user(request, db)
@@ -840,27 +795,18 @@ def seller_update_profile(
 
     user.full_name = full_name.strip() or None
     user.phone = phone.strip() or None
-    user.inn = inn.strip() or None
     user.farm_name = farm_name.strip() or None
     user.farm_address = farm_address.strip() or None
+    user.product_categories = product_categories.strip() or None
     user.farm_description = farm_description.strip() or None
-    user.supplier_registration_data = supplier_registration_data.strip() or None
-    user.supplier_bank_details = supplier_bank_details.strip() or None
+    user.inn = None
+    user.supplier_registration_data = None
+    user.supplier_bank_details = None
+    user.passport_photo_url = None
+    user.supplier_document_url = None
     farm_photo_url = _save_farm_photo(farm_photo)
     if farm_photo_url:
         user.farm_photo_url = farm_photo_url
-    passport_photo_url, passport_error = _save_passport_photo(passport_photo)
-    if passport_error:
-        request.session["seller_error"] = passport_error
-        return RedirectResponse("/seller/", status_code=303)
-    if passport_photo_url:
-        user.passport_photo_url = passport_photo_url
-    supplier_document_url, supplier_doc_error = _save_supplier_document(supplier_document)
-    if supplier_doc_error:
-        request.session["seller_error"] = supplier_doc_error
-        return RedirectResponse("/seller/", status_code=303)
-    if supplier_document_url:
-        user.supplier_document_url = supplier_document_url
     db.commit()
     request.session["seller_error"] = None
     request.session["seller_success"] = "\u0410\u043d\u043a\u0435\u0442\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0430."

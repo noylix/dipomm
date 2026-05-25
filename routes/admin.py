@@ -14,6 +14,22 @@ from order_statuses import ORDER_STATUSES, ORDER_STATUS_BADGES, ORDER_STATUS_LAB
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+FARMER_APPLICATION_STATUSES = (
+    "new",
+    "in_progress",
+    "waiting_documents",
+    "approved",
+    "rejected",
+)
+FARMER_APPLICATION_STATUS_LABELS = {
+    "new": "Новая",
+    "in_progress": "В обработке",
+    "waiting_documents": "Ожидаются документы",
+    "approved": "Одобрена",
+    "rejected": "Отклонена",
+    "pending": "Новая",
+}
+
 
 @router.get("/")
 def admin_page(request: Request, db: Session = Depends(get_db)):
@@ -127,18 +143,20 @@ def admin_moderation_page(request: Request, db: Session = Depends(get_db)):
         .all()
     )
     users = db.query(User).all()
-    pending_sellers = (
+    farmer_applications = (
         db.query(User)
-        .filter(User.role == "seller", User.seller_application_status == "pending")
+        .filter(User.role == "seller")
         .order_by(User.id.desc())
         .all()
     )
-    approved_sellers = (
-        db.query(User)
-        .filter(User.role == "seller", User.seller_application_status == "approved")
-        .order_by(User.id.desc())
-        .all()
-    )
+    pending_sellers = [
+        seller for seller in farmer_applications
+        if (seller.seller_application_status or "new") != "approved"
+    ]
+    approved_sellers = [
+        seller for seller in farmer_applications
+        if (seller.seller_application_status or "new") == "approved"
+    ]
     return request.app.state.templates.TemplateResponse(
         request, "manager",
         {
@@ -147,6 +165,9 @@ def admin_moderation_page(request: Request, db: Session = Depends(get_db)):
             "users": users,
             "pending_sellers": pending_sellers,
             "approved_sellers": approved_sellers,
+            "farmer_applications": farmer_applications,
+            "farmer_application_statuses": FARMER_APPLICATION_STATUSES,
+            "farmer_application_status_labels": FARMER_APPLICATION_STATUS_LABELS,
             "user": user,
         }
     )
@@ -348,6 +369,45 @@ def admin_update_commission(
         setting.value = str(value)
     db.commit()
     return RedirectResponse("/admin/", status_code=303)
+
+
+@router.post("/farmer-application/{user_id}/status")
+def admin_update_farmer_application(
+    user_id: int,
+    request: Request,
+    status: str = Form(...),
+    comment: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    me = get_optional_user(request, db)
+    guard = check_role(me, ["admin"])
+    if guard:
+        return guard
+
+    normalized_status = (status or "").strip()
+    if normalized_status == "pending":
+        normalized_status = "new"
+    if normalized_status not in FARMER_APPLICATION_STATUSES:
+        normalized_status = "new"
+
+    target = db.query(User).filter(User.id == user_id, User.role == "seller").first()
+    if target:
+        clean_comment = (comment or "").strip()
+        target.seller_application_status = normalized_status
+        target.is_approved = 1 if normalized_status == "approved" else 0
+        target.seller_application_admin_comment = clean_comment or None
+        target.seller_application_rejection_reason = clean_comment if normalized_status == "rejected" else None
+        db.add(Notification(
+            user_id=target.id,
+            type="system",
+            subject="Статус заявки фермера обновлен",
+            body=(
+                f"Статус вашей заявки: {FARMER_APPLICATION_STATUS_LABELS.get(normalized_status, normalized_status)}."
+                + (f" Комментарий: {clean_comment}" if clean_comment else "")
+            ),
+        ))
+        db.commit()
+    return RedirectResponse(url="/admin/moderation", status_code=303)
 
 
 @router.post("/user/approve/{user_id}")
