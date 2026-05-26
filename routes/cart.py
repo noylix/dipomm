@@ -2,7 +2,8 @@
 # Р Р°Р±РѕС‚Р° СЃ РєРѕСЂР·РёРЅРѕР№ РїРѕРєСѓРїРѕРє (С‚РѕР»СЊРєРѕ РґР»СЏ Р°РІС‚РѕСЂРёР·РѕРІР°РЅРЅС‹С…)
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
 from models import CartItem, Product, Wallet
@@ -17,6 +18,41 @@ from marketplace_utils import (
 )
 
 router = APIRouter(prefix="/cart", tags=["cart"])
+
+
+def _wants_json(request: Request) -> bool:
+    return (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("accept", "")
+    )
+
+
+def _cart_state_payload(user_id: int, db: Session) -> dict[str, object]:
+    items = db.query(CartItem).filter(CartItem.user_id == user_id).all()
+    quantities = {str(item.product_id): int(item.quantity or 0) for item in items if item.product_id}
+    return {
+        "position_count": len(quantities),
+        "items": quantities,
+    }
+
+
+def _cart_json_response(user_id: int, db: Session, ok: bool = True, message: str = "") -> JSONResponse:
+    payload = _cart_state_payload(user_id, db)
+    payload.update({"ok": ok, "message": message})
+    return JSONResponse(payload, status_code=200 if ok else 400)
+
+
+def _cart_redirect(request: Request) -> RedirectResponse:
+    return RedirectResponse(url=request.headers.get("referer") or "/cart/", status_code=303)
+
+
+@router.get("/state")
+def cart_state(request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    guard = check_role(user, ["user"])
+    if guard:
+        return {"position_count": 0, "items": {}}
+    return _cart_state_payload(user.id, db)
 
 
 @router.get("/")
@@ -136,12 +172,16 @@ def cart_add(product_id: int, request: Request, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product or product.status != "approved":
         request.session["cart_error"] = "\u0422\u043e\u0432\u0430\u0440 \u0431\u043e\u043b\u044c\u0448\u0435 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d."
-        return RedirectResponse(url="/cart/", status_code=303)
+        if _wants_json(request):
+            return _cart_json_response(user.id, db, ok=False, message="Товар больше недоступен.")
+        return _cart_redirect(request)
 
     available = product_stock_quantity(product)
     if available <= 0:
         request.session["cart_error"] = f"{product.name}: \u043d\u0435\u0442 \u0432 \u043d\u0430\u043b\u0438\u0447\u0438\u0438."
-        return RedirectResponse(url="/cart/", status_code=303)
+        if _wants_json(request):
+            return _cart_json_response(user.id, db, ok=False, message=f"{product.name}: нет в наличии.")
+        return _cart_redirect(request)
 
     existing = db.query(CartItem).filter(
         CartItem.user_id == user.id,
@@ -153,13 +193,54 @@ def cart_add(product_id: int, request: Request, db: Session = Depends(get_db)):
             request.session["cart_error"] = (
                 f'\u041d\u0435\u043b\u044c\u0437\u044f \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c "{product.name}" \u0431\u043e\u043b\u044c\u0448\u0435 {available} {product_unit(product)}.'
             )
-            return RedirectResponse(url="/cart/", status_code=303)
+            if _wants_json(request):
+                return _cart_json_response(user.id, db, ok=False, message=f'Нельзя добавить "{product.name}" больше {available} {product_unit(product)}.')
+            return _cart_redirect(request)
         existing.quantity += 1
     else:
         db.add(CartItem(user_id=user.id, product_id=product_id, quantity=1))
 
-    db.commit()
-    return RedirectResponse(url="/cart/", status_code=303)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(CartItem).filter(
+            CartItem.user_id == user.id,
+            CartItem.product_id == product_id
+        ).first()
+        if existing and existing.quantity < available:
+            existing.quantity += 1
+            db.commit()
+        else:
+            request.session["cart_error"] = (
+                f'\u041d\u0435\u043b\u044c\u0437\u044f \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c "{product.name}" \u0431\u043e\u043b\u044c\u0448\u0435 {available} {product_unit(product)}.'
+            )
+            if _wants_json(request):
+                return _cart_json_response(user.id, db, ok=False, message=f'Нельзя добавить "{product.name}" больше {available} {product_unit(product)}.')
+            return _cart_redirect(request)
+    if _wants_json(request):
+        return _cart_json_response(user.id, db, message="Добавлено в корзину.")
+    return _cart_redirect(request)
+
+
+@router.post("/dec-product/{product_id}")
+def cart_dec_product(product_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    guard = check_role(user, ["user"])
+    if guard:
+        return guard
+
+    item = db.query(CartItem).filter(CartItem.user_id == user.id, CartItem.product_id == product_id).first()
+    if item:
+        if item.quantity > 1:
+            item.quantity -= 1
+        else:
+            db.delete(item)
+        db.commit()
+
+    if _wants_json(request):
+        return _cart_json_response(user.id, db)
+    return _cart_redirect(request)
 
 
 @router.post("/remove/{item_id}")

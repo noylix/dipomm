@@ -51,6 +51,26 @@
             return value;
         }
     }
+    function dateTimeText(value) {
+        if (!value) return "";
+        try {
+            return new Date(value).toLocaleString("ru-RU");
+        } catch (_) {
+            return value;
+        }
+    }
+    function formatFileSize(bytes) {
+        const value = Number(bytes || 0);
+        if (!value) return "0 Б";
+        const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+        let index = 0;
+        let size = value;
+        while (size >= 1024 && index < units.length - 1) {
+            size /= 1024;
+            index += 1;
+        }
+        return `${size.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+    }
     function orderDisplayNumber(order) {
         if (!order) return "";
         return order.order_number || `#${order.id || ""}`;
@@ -89,6 +109,12 @@
             refunded: "\u0412\u043e\u0437\u0432\u0440\u0430\u0449\u0435\u043d"
         })[status] || status || "-";
     }
+    function isOrderPayable(order) {
+        return order && (order.status || "created") === "created" && (order.payment_status || "pending") === "pending";
+    }
+    function isOrderReceivable(order) {
+        return order && ["shipped", "delivering"].includes(order.status || "");
+    }
     function logisticsStatusText(value) {
         return ({
             created: "Создана",
@@ -115,6 +141,73 @@
             approved: "\u041e\u0434\u043e\u0431\u0440\u0435\u043d\u0430",
             rejected: "\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430",
         }[value] || value || "\u041d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438";
+    }
+    function productStatusText(value) {
+        return {
+            approved: "\u041e\u0434\u043e\u0431\u0440\u0435\u043d",
+            pending: "\u041d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438",
+            rejected: "\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d"
+        }[value] || value || "\u041e\u0434\u043e\u0431\u0440\u0435\u043d";
+    }
+    const COMPLAINT_STATUS_OPTIONS = ["new", "processing", "in_progress", "waiting_farmer", "sent_to_accountant", "resolved", "rejected", "closed"];
+    function complaintStatusText(value) {
+        return {
+            new: "\u041d\u043e\u0432\u0430\u044f",
+            processing: "\u0412 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
+            in_progress: "\u0412 \u0440\u0430\u0431\u043e\u0442\u0435",
+            waiting_farmer: "\u0416\u0434\u0435\u043c \u0444\u0435\u0440\u043c\u0435\u0440\u0430",
+            sent_to_accountant: "\u041f\u0435\u0440\u0435\u0434\u0430\u043d\u0430 \u0431\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0443",
+            resolved: "\u0420\u0435\u0448\u0435\u043d\u0430",
+            rejected: "\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430",
+            closed: "\u0417\u0430\u043a\u0440\u044b\u0442\u0430"
+        }[value] || value || "-";
+    }
+    function roleText(value) {
+        return {
+            user: "\u041f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c",
+            seller: "\u0424\u0435\u0440\u043c\u0435\u0440",
+            manager: "\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440",
+            admin: "\u0410\u0434\u043c\u0438\u043d",
+            accountant: "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440"
+        }[value] || value || "-";
+    }
+    function conversationStatusText(value) {
+        return ({ open: "\u041e\u0442\u043a\u0440\u044b\u0442", closed: "\u0417\u0430\u043a\u0440\u044b\u0442" })[value] || value || "-";
+    }
+    function payoutStatusText(value) {
+        return {
+            pending: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442",
+            transferred_to_partner: "\u041f\u0435\u0440\u0435\u0434\u0430\u043d\u043e \u043f\u0430\u0440\u0442\u043d\u0435\u0440\u0443",
+            refunded: "\u0412\u043e\u0437\u0432\u0440\u0430\u0442"
+        }[value] || value || "-";
+    }
+    function transactionStatusText(value) {
+        return {
+            pending: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442",
+            completed: "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u0430",
+            failed: "\u041e\u0448\u0438\u0431\u043a\u0430",
+            canceled: "\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u0430",
+            refunded: "\u0412\u043e\u0437\u0432\u0440\u0430\u0442"
+        }[value] || value || "-";
+    }
+    function transactionTypeText(value) {
+        return {
+            deposit: "\u041f\u043e\u043f\u043e\u043b\u043d\u0435\u043d\u0438\u0435",
+            withdrawal: "\u0412\u044b\u0432\u043e\u0434",
+            payment: "\u041e\u043f\u043b\u0430\u0442\u0430",
+            refund: "\u0412\u043e\u0437\u0432\u0440\u0430\u0442",
+            payout: "\u0412\u044b\u043f\u043b\u0430\u0442\u0430"
+        }[value] || value || "-";
+    }
+    function statusChipTone(value) {
+        const normalized = String(value || "").toLowerCase();
+        if (["approved", "paid", "completed", "resolved", "transferred_to_partner"].includes(normalized)) return "success";
+        if (["pending", "new", "created", "confirmed", "processing", "in_progress", "waiting_documents", "waiting_farmer", "sent_to_accountant", "assembling", "shipped", "delivering", "open"].includes(normalized)) return "warning";
+        if (["rejected", "canceled", "cancelled", "refunded", "closed", "failed"].includes(normalized)) return "danger";
+        return "neutral";
+    }
+    function StatusChip({ value, label }) {
+        return h("span", { className: `react-chip react-chip-${statusChipTone(value)}` }, label || value || "-");
     }
     function ownerName(product) {
         const owner = product && product.owner;
@@ -371,14 +464,43 @@
             return handleSubmitOnce(event);
         };
     }
+    function omitEmptyGetFields(event) {
+        const form = event.currentTarget;
+        if (!form || String(form.method || "").toLowerCase() !== "get") return true;
+        form.querySelectorAll("input, select, textarea").forEach(control => {
+            if (!control.name || control.disabled) return;
+            if (String(control.value || "").trim() === "") {
+                control.disabled = true;
+            }
+        });
+        return true;
+    }
+    function requiresInlineAuth(action) {
+        return !user && typeof action === "string" && (
+            action.startsWith("/cart/add/") ||
+            action.startsWith("/favorites/add/") ||
+            action.startsWith("/favorites/remove/")
+        );
+    }
+    function requestInlineAuth(event) {
+        if (event) event.preventDefault();
+        window.dispatchEvent(new CustomEvent("react:auth-required", { detail: { view: "login" } }));
+        return false;
+    }
     function PostButton({ action, children, className, title, ariaLabel, icon, confirmMessage, formClassName, formProps }) {
+        const submitHandler = event => {
+            if (requiresInlineAuth(action)) {
+                return requestInlineAuth(event);
+            }
+            return confirmMessage ? confirmSubmit(confirmMessage)(event) : handleSubmitOnce(event);
+        };
         return h(
             "form",
             {
                 action,
                 method: "post",
                 className: `react-inline-form ${formClassName || ""}`,
-                onSubmit: confirmMessage ? confirmSubmit(confirmMessage) : handleSubmitOnce,
+                onSubmit: submitHandler,
                 ...(formProps || {})
             },
             h(
@@ -424,12 +546,32 @@
     function ButtonLink({ href, children, className, key }, fallbackChildren) {
         return A({ key, href, className: `react-btn ${className || ""}` }, children || fallbackChildren);
     }
+    function interactiveRowProps(href) {
+        const open = event => {
+            if (!href || event.target.closest("a, button, input, select, textarea, label, form")) return;
+            window.location.href = href;
+        };
+        return {
+            className: "react-clickable-row",
+            tabIndex: 0,
+            role: "link",
+            "data-href": href,
+            onClick: open,
+            onKeyDown: event => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                open(event);
+            }
+        };
+    }
     function iconName(title) {
         const map = {
             "\u041a\u043e\u0440\u0437\u0438\u043d\u0430": "shopping-cart",
             "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435": "heart",
             "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f": "bell",
             "\u041a\u043e\u0448\u0435\u043b\u0435\u043a": "wallet",
+            "\u041f\u0440\u043e\u0444\u0438\u043b\u044c": "user-round",
+            "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f": "calculator",
             "\u041c\u043e\u0438 \u0437\u0430\u043a\u0430\u0437\u044b": "clipboard-list",
             "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c": "settings",
             "\u041a\u0430\u0431\u0438\u043d\u0435\u0442 \u0444\u0435\u0440\u043c\u0435\u0440\u0430": "sprout",
@@ -460,7 +602,10 @@
                 className: "react-icon-btn",
                 onClick
             },
-            Icon({ name: iconName(title) })
+            [
+                Icon({ key: "icon", name: iconName(title) }),
+                h("span", { key: "label", className: "react-icon-btn-label" }, title)
+            ]
         );
     }
     function NotificationsLink() {
@@ -484,6 +629,7 @@
             { href: "/notifications/", title: "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", "aria-label": "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f", className: "react-icon-btn react-icon-btn-badge" },
             [
                 Icon({ key: "icon", name: iconName("\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f") }),
+                h("span", { key: "label", className: "react-icon-btn-label" }, "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f"),
                 count > 0 ? h("span", { key: "badge", className: "react-counter-badge" }, count > 99 ? "99+" : String(count)) : null
             ]
         );
@@ -491,8 +637,8 @@
     function Field({ name, type, placeholder, defaultValue, required, className, min, max, step, minLength, maxLength, pattern, title, onChange }) {
         return h("input", { className: `react-input ${className || ""}`, name, type: type || "text", placeholder, defaultValue: defaultValue || "", required, min, max, step, minLength, maxLength, pattern, title, onChange });
     }
-    function Select({ name, defaultValue, value, onChange, children, className }) {
-        const selectProps = { className: `react-select ${className || ""}`, name };
+    function Select({ name, defaultValue, value, onChange, children, className, ariaLabel }, fallbackChildren) {
+        const selectProps = { className: `react-select ${className || ""}`, name, "aria-label": ariaLabel || name };
         if (value !== undefined) {
             selectProps.value = value;
         } else {
@@ -501,7 +647,7 @@
         if (onChange) {
             selectProps.onChange = onChange;
         }
-        return h("select", selectProps, children);
+        return h("select", selectProps, children || fallbackChildren);
     }
     function Textarea({ name, placeholder, defaultValue, className, rows, required, minLength, maxLength }) {
         return h("textarea", { className: `react-textarea ${className || ""}`, name, placeholder, defaultValue: defaultValue || "", rows: rows || 4, required, minLength, maxLength });
@@ -558,24 +704,7 @@
             )) : null
         ]);
     }
-    function Header({ onLogoutRequest, onBecomeSellerRequest }) {
-        const [catalogOpen, setCatalogOpen] = React.useState(false);
-        const catalogCategories = [
-            { key: "vegetables", label: "\u041e\u0432\u043e\u0449\u0438", href: "/catalog?category=\u043e\u0432\u043e\u0449\u0438" },
-            { key: "fruit", label: "\u0424\u0440\u0443\u043a\u0442\u044b", href: "/catalog?category=\u0444\u0440\u0443\u043a\u0442\u044b" },
-            { key: "dairy", label: "\u041c\u043e\u043b\u043e\u0447\u043d\u043e\u0435", href: "/catalog?category=\u043c\u043e\u043b\u043e\u043a\u043e" },
-            { key: "meat", label: "\u041c\u044f\u0441\u043e", href: "/catalog?category=\u043c\u044f\u0441\u043e" },
-            { key: "eggs", label: "\u042f\u0439\u0446\u0430", href: "/catalog?category=\u044f\u0439\u0446\u0430" },
-            { key: "honey", label: "\u041c\u0435\u0434", href: "/catalog?category=\u043c\u0451\u0434" },
-            { key: "bread", label: "\u0425\u043b\u0435\u0431 \u0438 \u0432\u044b\u043f\u0435\u0447\u043a\u0430", href: "/catalog?category=\u0445\u043b\u0435\u0431" },
-            { key: "greens", label: "\u0417\u0435\u043b\u0435\u043d\u044c", href: "/catalog?category=\u043e\u0432\u043e\u0449\u0438" }
-        ];
-        React.useEffect(() => {
-            if (!catalogOpen) return undefined;
-            const close = () => setCatalogOpen(false);
-            window.addEventListener("click", close);
-            return () => window.removeEventListener("click", close);
-        }, [catalogOpen]);
+    function Header({ onLogoutRequest, onBecomeSellerRequest, onLoginRequest }) {
         return h("div", { className: "react-topbar" },
             h("header", { className: "react-header wrap" },
                 A({ href: "/", className: "react-logo" }, [
@@ -589,35 +718,59 @@
                     A({ key: "business", href: "/business" }, "\u0414\u043b\u044f \u0431\u0438\u0437\u043d\u0435\u0441\u0430")
                 ]),
                 h("div", { className: "react-actions" }, [
-                    (!user || ["user", "seller"].includes(user.role)) && IconLink({ key: "cart", href: "/cart/", title: "\u041a\u043e\u0440\u0437\u0438\u043d\u0430" }),
+                    (!user || ["user", "seller"].includes(user.role)) && h(CartLink, { key: "cart", onLoginRequest }),
                     user && ["user", "seller"].includes(user.role) && IconLink({ key: "fav", href: "/favorites/", title: "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435" }),
-                    user && ["user", "seller"].includes(user.role) && IconLink({ key: "profile", href: "/profile", title: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c" }),
+                    user && ["user", "seller"].includes(user.role) && IconLink({ key: "profile", href: user.role === "seller" ? "/seller/settings" : "/profile", title: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c" }),
                     user && ["user", "seller"].includes(user.role) && h(NotificationsLink, { key: "nt" }),
                     user && ["user", "seller"].includes(user.role) && IconLink({ key: "wl", href: "/payment/wallet", title: "\u041a\u043e\u0448\u0435\u043b\u0435\u043a" }),
                     user && ["admin"].includes(user.role) && IconLink({ key: "adm", href: "/admin/", title: "\u0410\u0434\u043c\u0438\u043d-\u043f\u0430\u043d\u0435\u043b\u044c" }),
                     user && ["accountant"].includes(user.role) && IconLink({ key: "acc", href: "/accounting/", title: "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u044f" }),
                     user && user.role === "seller" && IconLink({ key: "sell", href: "/seller/", title: "\u041a\u0430\u0431\u0438\u043d\u0435\u0442 \u0444\u0435\u0440\u043c\u0435\u0440\u0430" }),
-                    user ? IconLink({ key: "out", href: "/logout", title: "\u0412\u044b\u0439\u0442\u0438", onClick: onLogoutRequest }) : IconLink({ key: "in", href: "/login", title: "\u0412\u043e\u0439\u0442\u0438" })
+                    user ? IconLink({ key: "out", href: "/logout", title: "\u0412\u044b\u0439\u0442\u0438", onClick: onLogoutRequest }) : IconLink({ key: "in", href: "/login", title: "\u0412\u043e\u0439\u0442\u0438", onClick: onLoginRequest })
                 ])
             ),
             h("form", { action: "/search", method: "get", className: "react-search wrap" }, [
-                h("button", {
+                A({
                     key: "catalog",
-                    type: "button",
-                    className: "react-btn",
-                    onClick: event => {
-                        event.stopPropagation();
-                        setCatalogOpen(open => !open);
-                    }
+                    href: "/catalog",
+                    className: "react-btn react-catalog-direct-link"
                 }, "\u041a\u0430\u0442\u0430\u043b\u043e\u0433"),
                 h(SearchBox, { key: "searchbox" }),
                 h("button", { key: "submit", className: "react-btn", type: "submit" }, "\u041d\u0430\u0439\u0442\u0438")
-            ]),
-            catalogOpen ? h("div", { className: "react-catalog-drawer wrap", onClick: event => event.stopPropagation() }, [
-                h("div", { className: "react-catalog-grid" }, catalogCategories.map(category =>
-                    A({ key: category.key, href: category.href, className: "react-catalog-item", onClick: () => setCatalogOpen(false) }, category.label)
-                ))
-            ]) : null
+            ])
+        );
+    }
+    function CartLink({ onLoginRequest }) {
+        const [count, setCount] = React.useState(Number(props.cart_position_count || 0));
+        React.useEffect(() => {
+            let alive = true;
+            const update = event => {
+                const detail = event.detail || {};
+                setCount(Number(detail.position_count || 0));
+            };
+            window.addEventListener("react:cart-updated", update);
+            if (user && user.role === "user" && window.fetch) {
+                fetch("/cart/state", { credentials: "same-origin" })
+                    .then(response => response.ok ? response.json() : { position_count: 0 })
+                    .then(data => {
+                        if (alive) setCount(Number((data && data.position_count) || 0));
+                    })
+                    .catch(() => {
+                        if (alive) setCount(0);
+                    });
+            }
+            return () => {
+                alive = false;
+                window.removeEventListener("react:cart-updated", update);
+            };
+        }, []);
+        return A(
+            { href: "/cart/", title: "\u041a\u043e\u0440\u0437\u0438\u043d\u0430", "aria-label": "\u041a\u043e\u0440\u0437\u0438\u043d\u0430", className: "react-icon-btn react-icon-btn-badge", onClick: !user ? onLoginRequest : undefined },
+            [
+                Icon({ key: "icon", name: iconName("\u041a\u043e\u0440\u0437\u0438\u043d\u0430") }),
+                h("span", { key: "label", className: "react-icon-btn-label" }, "\u041a\u043e\u0440\u0437\u0438\u043d\u0430"),
+                count > 0 ? h("span", { key: "badge", className: "react-counter-badge" }, count > 99 ? "99+" : String(count)) : null
+            ]
         );
     }
     function Footer() {
@@ -631,20 +784,22 @@
         );
     }
     function AdminShell({ children, onLogoutRequest }) {
+        const isManager = user && user.role === "manager";
         return h("div", { className: "react-shell" }, [
             h("div", { key: "top", className: "react-admin-top" },
                 h("div", { className: "react-admin-head wrap" }, [
-                    A({ key: "logo", href: "/admin/", className: "react-logo" }, [h("strong", null, "\u0421\u0412\u041e\u0418 \u0420\u042f\u0414\u042b"), h("span", null, "\u041f\u0430\u043d\u0435\u043b\u044c \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f")]),
+                    A({ key: "logo", href: isManager ? "/admin/moderation" : "/admin/", className: "react-logo" }, [h("strong", null, "\u0421\u0412\u041e\u0418 \u0420\u042f\u0414\u042b"), h("span", null, isManager ? "\u041f\u0430\u043d\u0435\u043b\u044c \u043c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u0430" : "\u041f\u0430\u043d\u0435\u043b\u044c \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f")]),
                     h("nav", { key: "nav", className: "react-admin-nav" }, [
-                        A({ href: "/admin/" }, "\u0413\u043b\u0430\u0432\u043d\u0430\u044f"),
+                        !isManager && A({ href: "/admin/" }, "\u0413\u043b\u0430\u0432\u043d\u0430\u044f"),
                         A({ href: "/reviews/admin" }, "\u041e\u0442\u0437\u044b\u0432\u044b"),
                         A({ href: "/complaints/admin" }, "\u0416\u0430\u043b\u043e\u0431\u044b"),
-                        A({ href: "/notifications/admin" }, "\u0420\u0430\u0441\u0441\u044b\u043b\u043a\u0438"),
+                        !isManager && A({ href: "/notifications/admin" }, "\u0420\u0430\u0441\u0441\u044b\u043b\u043a\u0438"),
                         A({ href: "/admin/analytics/" }, "\u041e\u0442\u0447\u0435\u0442\u044b"),
                         A({ href: "/admin/moderation" }, "\u041c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u044f"),
-                        A({ href: "/admin/manage" }, "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435"),
+                        !isManager && A({ href: "/admin/manage" }, "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435"),
+                        !isManager && A({ href: "/admin/backups" }, "\u0420\u0435\u0437\u0435\u0440\u0432\u043d\u043e\u0435 \u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435"),
                         A({ href: "/logout", onClick: onLogoutRequest }, "\u0412\u044b\u0439\u0442\u0438")
-                    ])
+                    ].filter(Boolean))
                 ])
             ),
             h("main", { key: "main", className: "react-main react-page wrap" }, children)
@@ -772,7 +927,14 @@
             ])
         ]);
     }
-    function Shell({ children, onLogoutRequest, onBecomeSellerRequest, logoutConfirm, closeLogoutConfirm, confirmLogout, sellerSignupOpen, closeSellerSignup, noticeMessage, closeNotice }) {
+    function Shell({ children, onLogoutRequest, onBecomeSellerRequest, onLoginRequest, logoutConfirm, closeLogoutConfirm, confirmLogout, authView, closeAuth, switchAuth, noticeMessage, closeNotice }) {
+        const activeAuthView = authView || (authRouteSet.has(page) ? page : null);
+        if (authRouteSet.has(page)) {
+            return h("div", { className: "react-shell react-auth-shell" }, [
+                h("main", { key: "m", className: "react-main" }),
+                h(AuthFlowModal, { key: "auth-modal", open: Boolean(activeAuthView), view: activeAuthView, onClose: closeAuth, onSwitch: switchAuth })
+            ]);
+        }
         if (page === "accounting" || page === "accounting_order") {
             return h("div", { className: "react-shell" }, [
                 h("main", { key: "m", className: "react-main react-page wrap" }, children),
@@ -800,7 +962,7 @@
                 })
             ]);
         }
-        if (user && user.role === "admin") {
+        if (user && (user.role === "admin" || user.role === "manager")) {
             return h("div", { className: "react-shell" }, [
                 h(AdminShell, { key: "admin", onLogoutRequest }, children),
                 h(ConfirmDialog, {
@@ -827,7 +989,7 @@
             ]);
         }
         return h("div", { className: "react-shell" }, [
-            h(Header, { key: "h", onLogoutRequest, onBecomeSellerRequest }),
+            h(Header, { key: "h", onLogoutRequest, onBecomeSellerRequest, onLoginRequest }),
             h("main", { key: "m", className: "react-main react-page wrap" }, children),
             h(Footer, { key: "f" }),
             h(ConfirmDialog, {
@@ -838,7 +1000,7 @@
                 onCancel: closeLogoutConfirm,
                 onConfirm: confirmLogout
             }),
-            h(SellerSignupModal, { key: "seller-signup", open: sellerSignupOpen, onClose: closeSellerSignup }),
+            h(AuthFlowModal, { key: "auth-modal", open: Boolean(activeAuthView), view: activeAuthView, onClose: closeAuth, onSwitch: switchAuth }),
             h(NoticeDialog, {
                 key: "notice-dialog",
                 open: showGlobalNotice,
@@ -848,15 +1010,20 @@
             })
         ]);
     }
-    function ProductCard({ product, favorite }) {
+    function ProductCard({ product, favorite, cartQuantity, onCartQuantityChange }) {
         if (!product) return null;
         const status = stockStatus(product);
+        const hasDiscount = Boolean(product.has_discount || (Number(product.discount_price || 0) > 0 && Number(product.discount_price || 0) < Number(product.price || 0)));
         return h("article", { className: `react-product-card stock-${status}` }, [
             A({ key: "img", href: `/product/${product.id}`, className: "react-product-image" },
-                h(ProductMedia, { product })
+                h(React.Fragment, null, [
+                    hasDiscount ? h("span", { className: "react-product-badge" }, "\u0421\u043a\u0438\u0434\u043a\u0430") : null,
+                    product.has_certificate ? h("span", { className: "react-product-badge certificate" }, "\u0421\u0435\u0440\u0442.") : null,
+                    h(ProductMedia, { product })
+                ])
             ),
             h("div", { key: "body", className: "react-product-body" }, [
-                h("div", { key: "chips", className: "react-chip-row" }, [product.category && h("span", { className: "react-chip" }, product.category), product.seller_rating && h("span", { className: "react-chip" }, `\u0432\u0098\u2026 ${product.seller_rating}`)]),
+                h("div", { key: "chips", className: "react-chip-row react-product-meta" }, [product.category && h("span", { className: "react-chip" }, product.category), product.seller_rating && h("span", { className: "react-chip" }, `\u2605 ${product.seller_rating}`)]),
                 A({ key: "name", href: `/product/${product.id}`, className: "react-product-name" }, product.name),
                 sellerLink(product)
                     ? A({ key: "seller", href: sellerLink(product), className: "react-muted" }, `\u043e\u0442 ${ownerName(product)}`)
@@ -864,12 +1031,28 @@
                 h(PriceDisplay, { key: "price", product }),
                 h("div", { key: "stock", className: `react-stock-label stock-${status}` }, stockText(product)),
                 h("div", { key: "actions", className: "react-actions" }, [
-                    canBuy(product)
-                        ? PostButton({ action: `/cart/add/${product.id}`, children: "\u0412 \u043a\u043e\u0440\u0437\u0438\u043d\u0443" })
-                        : h("span", { className: "react-stock-empty" }, "\u041d\u0435\u0442 \u0432 \u043d\u0430\u043b\u0438\u0447\u0438\u0438"),
+                    h(ProductCartControl, { product, quantity: cartQuantity, onQuantityChange: onCartQuantityChange }),
                     FavoriteButton({ product, favorite })
                 ])
             ])
+        ]);
+    }
+    function renderStars(rating) {
+        const value = Math.max(0, Math.min(5, Number(rating) || 0));
+        return "\u2605".repeat(value) + "\u2606".repeat(5 - value);
+    }
+    function ReviewResponse({ response }) {
+        const [open, setOpen] = React.useState(false);
+        const text = (response || "").trim();
+        if (!text) return null;
+        return h("div", { className: "react-review-response" }, [
+            h("button", {
+                type: "button",
+                className: "react-review-response-toggle",
+                onClick: () => setOpen(value => !value),
+                "aria-expanded": open ? "true" : "false"
+            }, open ? "\u0421\u043a\u0440\u044b\u0442\u044c \u043e\u0442\u0432\u0435\u0442 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430" : "\u041f\u043e\u0441\u043c\u043e\u0442\u0440\u0435\u0442\u044c \u043e\u0442\u0432\u0435\u0442 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430"),
+            open ? h("div", { className: "react-review-response-body" }, text) : null
         ]);
     }
     function FavoriteButton({ product, favorite }) {
@@ -886,10 +1069,86 @@
             }
         });
     }
+    function notifyCartState(data) {
+        window.dispatchEvent(new CustomEvent("react:cart-updated", { detail: data || { position_count: 0, items: {} } }));
+    }
+    function ProductCartControl({ product, quantity, onQuantityChange }) {
+        const [busy, setBusy] = React.useState(false);
+        const [message, setMessage] = React.useState("");
+        const qty = Number(quantity || 0);
+        const maxQty = stockQuantity(product);
+        const requestCart = action => {
+            if (!user) {
+                window.dispatchEvent(new CustomEvent("react:auth-required", { detail: { view: "login" } }));
+                return;
+            }
+            if (!product || busy) return;
+            setBusy(true);
+            setMessage("");
+            fetch(action, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Accept": "application/json",
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            })
+                .then(response => response.json().then(data => ({ ok: response.ok && data.ok !== false, data })))
+                .then(result => {
+                    const data = result.data || {};
+                    const nextQty = Number((data.items && data.items[String(product.id)]) || 0);
+                    if (onQuantityChange) onQuantityChange(product.id, nextQty);
+                    notifyCartState(data);
+                    setMessage(result.ok ? "" : (data.message || "Не удалось обновить корзину."));
+                })
+                .catch(() => setMessage("Не удалось обновить корзину."))
+                .finally(() => setBusy(false));
+        };
+        if (!canBuy(product)) return h("span", { className: "react-stock-empty" }, "\u041d\u0435\u0442 \u0432 \u043d\u0430\u043b\u0438\u0447\u0438\u0438");
+        if (qty <= 0) {
+            return h("div", { className: "react-product-cart-control" }, [
+                h("button", { type: "button", className: "react-btn react-buy-btn", disabled: busy, onClick: () => requestCart(`/cart/add/${product.id}`) }, busy ? "\u0414\u043e\u0431\u0430\u0432\u043b\u044f\u0435\u043c..." : "\u0412 \u043a\u043e\u0440\u0437\u0438\u043d\u0443"),
+                message ? h("span", { className: "react-cart-inline-message" }, message) : null
+            ]);
+        }
+        return h("div", { className: "react-product-cart-control" }, [
+            h("div", { className: "react-product-qty-control" }, [
+                h("button", { type: "button", className: "react-icon-btn react-qty-symbol-btn", disabled: busy, title: "\u0423\u043c\u0435\u043d\u044c\u0448\u0438\u0442\u044c", onClick: () => requestCart(`/cart/dec-product/${product.id}`) }, "\u2212"),
+                h("span", { className: "react-cart-qty" }, qty),
+                h("button", { type: "button", className: "react-icon-btn react-qty-symbol-btn", disabled: busy || qty >= maxQty, title: "\u0423\u0432\u0435\u043b\u0438\u0447\u0438\u0442\u044c", onClick: () => requestCart(`/cart/add/${product.id}`) }, "+")
+            ]),
+            message ? h("span", { className: "react-cart-inline-message" }, message) : null
+        ]);
+    }
     function ProductsGrid({ products, favorite }) {
         const list = products || [];
+        const [cartItems, setCartItems] = React.useState({});
+        React.useEffect(() => {
+            let alive = true;
+            if (user && user.role === "user" && window.fetch) {
+                fetch("/cart/state", { credentials: "same-origin" })
+                    .then(response => response.ok ? response.json() : { items: {}, position_count: 0 })
+                    .then(data => {
+                        if (!alive) return;
+                        setCartItems(data.items || {});
+                        notifyCartState(data);
+                    })
+                    .catch(() => {});
+            }
+            return () => {
+                alive = false;
+            };
+        }, []);
+        const setProductQuantity = (productId, quantity) => {
+            setCartItems(current => {
+                const next = { ...(current || {}) };
+                if (quantity > 0) next[String(productId)] = quantity;
+                else delete next[String(productId)];
+                return next;
+            });
+        };
         if (!list.length) return h("div", { className: "react-empty react-panel" }, "\u0422\u043e\u0432\u0430\u0440\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.");
-        return h("div", { className: "react-products-grid" }, list.map(p => h(ProductCard, { key: p.id, product: p, favorite })));
+        return h("div", { className: "react-products-grid" }, list.map(p => h(ProductCard, { key: p.id, product: p, favorite, cartQuantity: cartItems[String(p.id)] || 0, onCartQuantityChange: setProductQuantity })));
     }
     function SearchEmptyState() {
         return h("div", { className: "react-empty react-panel react-stack" }, [
@@ -928,7 +1187,29 @@
             { value: "\u043d\u0430\u043f\u0438\u0442\u043a\u0438", label: "\u041d\u0430\u043f\u0438\u0442\u043a\u0438" },
             { value: "\u0441\u043b\u0430\u0434\u043e\u0441\u0442\u0438", label: "\u0421\u043b\u0430\u0434\u043e\u0441\u0442\u0438" }
         ];
-        const [selectedCategory, setSelectedCategory] = React.useState(props.category || "");
+        const categoryIcons = {
+            "": "layout-grid",
+            "\u043c\u043e\u043b\u043e\u043a\u043e": "milk",
+            "\u043c\u044f\u0441\u043e": "beef",
+            "\u043e\u0432\u043e\u0449\u0438": "carrot",
+            "\u0444\u0440\u0443\u043a\u0442\u044b": "apple",
+            "\u044f\u0433\u043e\u0434\u044b": "cherry",
+            "\u0441\u044b\u0440": "pizza",
+            "\u043a\u0443\u0440\u0438\u0446\u0430": "drumstick",
+            "\u044f\u0439\u0446\u0430": "egg",
+            "\u043c\u0451\u0434": "flower-2",
+            "\u0445\u043b\u0435\u0431": "wheat",
+            "\u0431\u0430\u043a\u0430\u043b\u0435\u044f": "package",
+            "\u043a\u043e\u043d\u0441\u0435\u0440\u0432\u044b": "archive",
+            "\u0437\u0430\u043c\u043e\u0440\u043e\u0437\u043a\u0430": "snowflake",
+            "\u043d\u0430\u043f\u0438\u0442\u043a\u0438": "cup-soda",
+            "\u0441\u043b\u0430\u0434\u043e\u0441\u0442\u0438": "cookie"
+        };
+        const promoLinks = [
+            { href: "/catalog?category=sale", title: "\u0417\u0435\u043b\u0451\u043d\u044b\u0435 \u0446\u0435\u043d\u044b", text: "\u0422\u043e\u0432\u0430\u0440\u044b \u0441\u043e \u0441\u043a\u0438\u0434\u043a\u043e\u0439", icon: "badge-percent", tone: "green" },
+            { href: "/catalog?category=new", title: "\u041d\u043e\u0432\u0438\u043d\u043a\u0438", text: "\u0421\u0432\u0435\u0436\u0438\u0435 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438", icon: "sparkles", tone: "cream" },
+            { href: "/catalog?category=popular", title: "\u0425\u0438\u0442\u044b", text: "\u0427\u0430\u0449\u0435 \u0432\u0441\u0435\u0433\u043e \u0431\u0435\u0440\u0443\u0442", icon: "flame", tone: "yellow" }
+        ];
         const [selectedSort, setSelectedSort] = React.useState(props.sort || "rating");
         const [selectedStock, setSelectedStock] = React.useState(props.in_stock || "");
         const [selectedCert, setSelectedCert] = React.useState(props.has_certificate || "");
@@ -939,17 +1220,15 @@
             { value: "price_asc", label: "\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0434\u0435\u0448\u0435\u0432\u043b\u0435" },
             { value: "price_desc", label: "\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0434\u043e\u0440\u043e\u0436\u0435" }
         ];
-        const stockOptions = [
-            { value: "", label: "\u041b\u044e\u0431\u0430\u044f \u043d\u0430\u043b\u0438\u0447\u0438\u0435" },
-            { value: "1", label: "\u0422\u043e\u043b\u044c\u043a\u043e \u0432 \u043d\u0430\u043b\u0438\u0447\u0438\u0438" }
-        ];
-        const certOptions = [
-            { value: "", label: "\u041b\u044e\u0431\u043e\u0439 \u0442\u0438\u043f" },
-            { value: "1", label: "\u0421 \u0441\u0435\u0440\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u043c" }
-        ];
         const pageNum = Number(props.page_num || 1);
         const totalPages = Number(props.total_pages || 1);
         const makeCatalogPageHref = targetPage => {
+            if (page === "search") {
+                const searchParams = new URLSearchParams();
+                if (props.q) searchParams.set("q", props.q);
+                searchParams.set("page", String(targetPage));
+                return `/search?${searchParams.toString()}`;
+            }
             const params = new URLSearchParams();
             if (props.category) params.set("category", props.category);
             if (props.sort) params.set("sort", props.sort);
@@ -960,62 +1239,149 @@
             params.set("page", String(targetPage));
             return `/catalog?${params.toString()}`;
         };
-        return h(React.Fragment, null, [
-            h("div", { className: "react-page-title" }, [page === "search" ? null : h("h1", null, page === "favorites" ? "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435" : "\u041a\u0430\u0442\u0430\u043b\u043e\u0433"), h("span", { className: "react-muted" }, `${(props.products || []).length} \u0442\u043e\u0432\u0430\u0440\u043e\u0432`)]),
-            props.search_hint && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.search_hint),
-            page !== "favorites" && page !== "search" && h("form", { action: "/catalog", method: "get", className: "react-panel react-form-grid" }, [
-                    h("div", { key: "cat", className: "wide react-stack" }, [
-                        h("div", { className: "react-chip-row" }, categories.map(c => h("button", {
-                            type: "button",
-                            className: `react-chip react-chip-button${selectedCategory === c.value ? " active" : ""}`,
-                            onClick: () => setSelectedCategory(c.value),
-                            "aria-pressed": selectedCategory === c.value ? "true" : "false"
-                        }, c.label)),
-                        ),
-                        h("input", { type: "hidden", name: "category", value: selectedCategory })
+        const resultCount = (props.products || []).length;
+        const activeCategoryLabel = (categories.find(item => item.value === props.category) || categories[0]).label;
+        const activeCategoryInput = props.category ? h("input", { type: "hidden", name: "category", value: props.category }) : null;
+        const sortLabel = (sortOptions.find(item => item.value === (props.sort || "rating")) || sortOptions[0]).label;
+        const activeFilters = [
+            props.category ? `\u041f\u043e\u043b\u043a\u0430: ${activeCategoryLabel}` : null,
+            props.sort && props.sort !== "rating" ? sortLabel : null,
+            props.min_price ? `\u043e\u0442 ${props.min_price} \u0440\u0443\u0431` : null,
+            props.max_price ? `\u0434\u043e ${props.max_price} \u0440\u0443\u0431` : null,
+            props.in_stock ? "\u0412 \u043d\u0430\u043b\u0438\u0447\u0438\u0438" : null,
+            props.has_certificate ? "\u0421 \u0441\u0435\u0440\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u043c" : null
+        ].filter(Boolean);
+        const catalogForm = page !== "favorites" && page !== "search" && h("form", { action: "/catalog", method: "get", className: "react-catalog-filter-card react-form-grid", onSubmit: omitEmptyGetFields }, [
+                    activeCategoryInput,
+                    h("div", { key: "head", className: "wide react-catalog-filter-head" }, [
+                        h("div", null, [
+                            h("strong", { className: "react-filter-title" }, "\u0423\u0442\u043e\u0447\u043d\u0438\u0442\u044c"),
+                            h("span", { className: "react-muted" }, props.category ? `\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f: ${activeCategoryLabel}` : "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044e \u0432\u044b\u0431\u0438\u0440\u0430\u0439\u0442\u0435 \u0441\u043b\u0435\u0432\u0430")
+                        ]),
+                        (props.category || props.sort !== "rating" || props.min_price || props.max_price || props.in_stock || props.has_certificate)
+                            ? A({ href: props.category ? `/catalog?category=${encodeURIComponent(props.category)}` : "/catalog", className: "react-btn secondary" }, "\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c")
+                            : null
                     ]),
-                    h("div", { key: "sort", className: "wide react-stack" }, [
-                        h("div", { className: "react-chip-row" }, sortOptions.map(item => h("button", {
+                    activeFilters.length ? h("div", { key: "active", className: "wide react-active-filters" }, activeFilters.map(item =>
+                        h("span", { key: item, className: "react-filter-pill" }, item)
+                    )) : null,
+                    h("div", { key: "sort", className: "wide react-filter-group" }, [
+                        h("strong", { className: "react-filter-title" }, "\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u044c"),
+                        h("div", { className: "react-segment-row" }, sortOptions.map(item => h("button", {
                             type: "button",
-                            className: `react-chip react-chip-button${selectedSort === item.value ? " active" : ""}`,
+                            className: `react-segment${selectedSort === item.value ? " active" : ""}`,
                             onClick: () => setSelectedSort(item.value),
                             "aria-pressed": selectedSort === item.value ? "true" : "false"
                         }, item.label))),
                         h("input", { type: "hidden", name: "sort", value: selectedSort || "rating" })
                     ]),
-                    Field({ key: "min", name: "min_price", type: "number", step: "0.01", min: "0", placeholder: "\u0426\u0435\u043d\u0430 \u043e\u0442", defaultValue: props.min_price || "" }),
-                    Field({ key: "max", name: "max_price", type: "number", step: "0.01", min: "0", placeholder: "\u0426\u0435\u043d\u0430 \u0434\u043e", defaultValue: props.max_price || "" }),
-                    h("div", { key: "stock", className: "react-chip-row" }, stockOptions.map(item => h("button", {
-                        type: "button",
-                        className: `react-chip react-chip-button${selectedStock === item.value ? " active" : ""}`,
-                        onClick: () => setSelectedStock(item.value),
-                        "aria-pressed": selectedStock === item.value ? "true" : "false"
-                    }, item.label))),
-                    h("input", { key: "stock-hidden", type: "hidden", name: "in_stock", value: selectedStock }),
-                    h("div", { key: "cert", className: "react-chip-row" }, certOptions.map(item => h("button", {
-                        type: "button",
-                        className: `react-chip react-chip-button${selectedCert === item.value ? " active" : ""}`,
-                        onClick: () => setSelectedCert(item.value),
-                        "aria-pressed": selectedCert === item.value ? "true" : "false"
-                    }, item.label))),
-                    h("input", { key: "cert-hidden", type: "hidden", name: "has_certificate", value: selectedCert }),
-                    h("button", { key: "submit", className: "react-btn wide", type: "submit" }, "\u041f\u0440\u0438\u043c\u0435\u043d\u0438\u0442\u044c")
-                ]),
-            page === "search" && !(props.products || []).length
-                ? h(SearchEmptyState)
-                : h(React.Fragment, null, [
-                    h(ProductsGrid, { key: "grid", products: props.products || [], favorite: page === "favorites" }),
-                    totalPages > 1 && h("div", { key: "pager", className: "react-actions", style: { marginTop: 16, justifyContent: "center" } }, [
-                        pageNum > 1 ? ButtonLink({ href: makeCatalogPageHref(pageNum - 1), className: "secondary" }, "\u041d\u0430\u0437\u0430\u0434") : h("span"),
-                        h("span", { className: "react-muted" }, `${pageNum} / ${totalPages}`),
-                        pageNum < totalPages ? ButtonLink({ href: makeCatalogPageHref(pageNum + 1), className: "secondary" }, "\u0414\u0430\u043b\u0435\u0435") : h("span")
-                    ])
+                    h("label", { key: "price", className: "react-filter-group react-price-filter" }, [
+                        h("strong", { className: "react-filter-title" }, "\u0426\u0435\u043d\u0430"),
+                        h("div", { className: "react-price-filter-inputs" }, [
+                            Field({ key: "min", name: "min_price", type: "number", step: "0.01", min: "0", placeholder: "\u043e\u0442", defaultValue: props.min_price || "" }),
+                            Field({ key: "max", name: "max_price", type: "number", step: "0.01", min: "0", placeholder: "\u0434\u043e", defaultValue: props.max_price || "" })
+                        ])
+                    ]),
+                    h("div", { key: "quick", className: "react-filter-group" }, [
+                        h("strong", { className: "react-filter-title" }, "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u0443\u0441\u043b\u043e\u0432\u0438\u044f"),
+                        h("div", { className: "react-toggle-row" }, [
+                            h("button", {
+                                type: "button",
+                                className: `react-toggle-pill${selectedStock === "1" ? " active" : ""}`,
+                                onClick: () => setSelectedStock(value => value === "1" ? "" : "1"),
+                                "aria-pressed": selectedStock === "1" ? "true" : "false"
+                            }, "\u0412 \u043d\u0430\u043b\u0438\u0447\u0438\u0438"),
+                            h("button", {
+                                type: "button",
+                                className: `react-toggle-pill${selectedCert === "1" ? " active" : ""}`,
+                                onClick: () => setSelectedCert(value => value === "1" ? "" : "1"),
+                                "aria-pressed": selectedCert === "1" ? "true" : "false"
+                            }, "\u0421 \u0441\u0435\u0440\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u043c")
+                        ]),
+                        h("input", { key: "stock-hidden", type: "hidden", name: "in_stock", value: selectedStock }),
+                        h("input", { key: "cert-hidden", type: "hidden", name: "has_certificate", value: selectedCert })
+                    ]),
+                    h("button", { key: "submit", className: "react-btn react-filter-submit", type: "submit" }, "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c")
+                ]);
+        const content = page === "search" && !(props.products || []).length
+            ? h(SearchEmptyState)
+            : h(React.Fragment, null, [
+                h(ProductsGrid, { key: "grid", products: props.products || [], favorite: page === "favorites" }),
+                totalPages > 1 && h("div", { key: "pager", className: "react-actions react-catalog-pager" }, [
+                    pageNum > 1 ? ButtonLink({ href: makeCatalogPageHref(pageNum - 1), className: "secondary" }, "\u041d\u0430\u0437\u0430\u0434") : h("span"),
+                    h("span", { className: "react-muted" }, `${pageNum} / ${totalPages}`),
+                    pageNum < totalPages ? ButtonLink({ href: makeCatalogPageHref(pageNum + 1), className: "secondary" }, "\u0414\u0430\u043b\u0435\u0435") : h("span")
                 ])
+            ]);
+        if (page === "favorites" || page === "search") {
+            return h(React.Fragment, null, [
+                h("div", { className: "react-page-title" }, [page === "search" ? null : h("h1", null, "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435"), h("span", { className: "react-muted" }, `${resultCount} \u0442\u043e\u0432\u0430\u0440\u043e\u0432`)]),
+                props.search_hint && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.search_hint),
+                content
+            ]);
+        }
+        return h("div", { className: "react-catalog-page" }, [
+            h("section", { className: "react-catalog-hero" }, [
+                h("div", { className: "react-catalog-kicker" }, "\u0424\u0435\u0440\u043c\u0435\u0440\u0441\u043a\u0430\u044f \u0432\u0438\u0442\u0440\u0438\u043d\u0430"),
+                h("div", { className: "react-page-title" }, [
+                    h("h1", null, "\u041a\u0430\u0442\u0430\u043b\u043e\u0433"),
+                    h("span", { className: "react-muted" }, `${resultCount} \u0442\u043e\u0432\u0430\u0440\u043e\u0432`)
+                ]),
+                h("p", null, "\u0412\u044b\u0431\u0438\u0440\u0430\u0439\u0442\u0435 \u0441\u0432\u0435\u0436\u0438\u0435 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u044b \u043f\u043e \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f\u043c, \u0441\u043e\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u043e \u0446\u0435\u043d\u0435 \u0438 \u043d\u0430\u043b\u0438\u0447\u0438\u044e, \u0430 \u043c\u044b \u043d\u0435 \u043f\u0443\u0441\u0442\u0438\u043c \u0432\u0430\u0441 \u043d\u0430 \u043f\u0443\u0441\u0442\u0443\u044e \u043f\u043e\u043b\u043a\u0443.")
+            ]),
+            h("div", { className: "react-catalog-promo-row" }, promoLinks.map(item =>
+                A({ key: item.href, href: item.href, className: `react-catalog-promo tone-${item.tone}` }, [
+                    h("span", { className: "react-catalog-promo-icon" }, Icon({ name: item.icon })),
+                    h("strong", null, item.title),
+                    h("small", null, item.text)
+                ])
+            )),
+            h("div", { className: "react-catalog-layout" }, [
+                h("aside", { className: "react-catalog-sidebar" }, [
+                    h("h2", null, "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438"),
+                    h("nav", null, categories.map(c => A({
+                        key: c.value || "all",
+                        href: c.value ? `/catalog?category=${encodeURIComponent(c.value)}` : "/catalog",
+                        className: `react-catalog-side-link${(props.category || "") === c.value ? " active" : ""}`
+                    }, [
+                        h("span", null, Icon({ name: categoryIcons[c.value] || "leaf" })),
+                        h("b", null, c.label)
+                    ])))
+                ]),
+                h("section", { className: "react-catalog-content" }, [
+                    h("div", { className: "react-catalog-toolbar" }, [
+                        h("div", null, [
+                            h("span", { className: "react-catalog-kicker" }, activeCategoryLabel),
+                            h("h2", null, "\u0422\u043e\u0432\u0430\u0440\u044b \u043d\u0430 \u043f\u043e\u043b\u043a\u0435")
+                        ]),
+                        h("span", { className: "react-muted" }, totalPages > 1 ? `\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430 ${pageNum} \u0438\u0437 ${totalPages}` : "\u0412\u0441\u0451 \u043d\u0430 \u043e\u0434\u043d\u043e\u0439 \u043f\u043e\u043b\u043a\u0435")
+                    ]),
+                    catalogForm,
+                    content
+                ])
+            ])
         ]);
     }
     function ProductPage() {
         const product = props.product || {};
         const status = stockStatus(product);
+        const [cartQty, setCartQty] = React.useState(0);
+        React.useEffect(() => {
+            let alive = true;
+            if (user && user.role === "user" && product.id && window.fetch) {
+                fetch("/cart/state", { credentials: "same-origin" })
+                    .then(response => response.ok ? response.json() : { items: {}, position_count: 0 })
+                    .then(data => {
+                        if (!alive) return;
+                        setCartQty(Number((data.items && data.items[String(product.id)]) || 0));
+                        notifyCartState(data);
+                    })
+                    .catch(() => {});
+            }
+            return () => {
+                alive = false;
+            };
+        }, [product.id]);
         return h(React.Fragment, null, [
             h("section", { className: "react-product-detail" }, [
                 h("div", { className: "react-product-detail-image react-panel" },
@@ -1039,9 +1405,7 @@
                         h("div", { className: "react-card react-product-spec-card" }, [h("b", { className: "react-product-spec-label" }, "\u0421\u0440\u043e\u043a \u0433\u043e\u0434\u043d\u043e\u0441\u0442\u0438"), h("div", { className: "react-product-spec-value" }, product.expiration_days ? `${product.expiration_days} \u0434\u043d.` : "\u0423\u0442\u043e\u0447\u043d\u044f\u0435\u0442\u0441\u044f")])
                     ]),
                     h("div", { className: "react-actions" }, [
-                        canBuy(product)
-                            ? PostButton({ action: `/cart/add/${product.id}`, children: "\u0412 \u043a\u043e\u0440\u0437\u0438\u043d\u0443" })
-                            : h("span", { className: "react-stock-empty" }, "\u041d\u0435\u0442 \u0432 \u043d\u0430\u043b\u0438\u0447\u0438\u0438"),
+                        h(ProductCartControl, { product, quantity: cartQty, onQuantityChange: (_productId, quantity) => setCartQty(quantity) }),
                         FavoriteButton({ product, favorite: false }),
                         user && user.role === "user" && ButtonLink({ href: `/conversations/product/${product.id}`, className: "secondary" }, "\u0417\u0430\u0434\u0430\u0442\u044c \u0432\u043e\u043f\u0440\u043e\u0441 \u0444\u0435\u0440\u043c\u0435\u0440\u0443")
                     ])
@@ -1053,94 +1417,239 @@
         ]);
     }
     function ReviewsBlock({ reviews }) {
-        return h("section", { className: "react-panel" }, [
+        return h("section", { className: "react-panel react-product-reviews" }, [
             h("div", { className: "react-page-title" }, [h("h2", null, "\u041e\u0442\u0437\u044b\u0432\u044b"), A({ href: props.product ? `/reviews/product/${props.product.id}` : "/reviews", className: "react-btn secondary" }, "\u0412\u0441\u0435 \u043e\u0442\u0437\u044b\u0432\u044b")]),
             (reviews || []).length ? h("div", { className: "react-stack" }, reviews.map(r => h("div", { key: r.id || (r.review && r.review.id), className: "react-card" }, [
-                h("div", null, "\u0432\u0098\u2026".repeat((r.review || r).rating || 5)),
+                h("div", { className: "react-review-stars", "aria-label": `\u041e\u0446\u0435\u043d\u043a\u0430 ${(r.review || r).rating || 0} \u0438\u0437 5` }, renderStars((r.review || r).rating || 0)),
                 h("p", null, (r.review || r).text || "\u0411\u0435\u0437 \u0442\u0435\u043a\u0441\u0442\u0430"),
-                (r.review || r).seller_response && h("p", { className: "react-muted" }, `\u041e\u0442\u0432\u0435\u0442 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430: ${(r.review || r).seller_response}`)
+                h(ReviewResponse, { response: (r.review || r).seller_response })
             ]))) : h("div", { className: "react-empty" }, "\u041e\u0442\u0437\u044b\u0432\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
         ]);
     }
-    function LoginPage({ onBecomeSellerRequest }) {
-        return h("div", { className: "react-panel", style: { maxWidth: 520, margin: "0 auto" } }, [
-            h("h1", null, "\u0412\u0445\u043e\u0434"),
+    const authRouteSet = new Set(["login", "forgot_password", "forgot_password_sent", "reset_password", "register", "become_seller"]);
+    function AuthLink({ href, onClick, className, children }, fallbackChildren) {
+        return A({ href, className, onClick }, children || fallbackChildren);
+    }
+    function LoginContent({ onSwitch, onSubmit, errorText }) {
+        const loginError = errorText || props.error;
+        return [
             props.password_reset_success && h("p", { className: "alert alert-success" }, "\u041f\u0430\u0440\u043e\u043b\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d. \u0412\u043e\u0439\u0434\u0438\u0442\u0435 \u0441 \u043d\u043e\u0432\u044b\u043c \u043f\u0430\u0440\u043e\u043b\u0435\u043c."),
-            props.error && h("p", { className: "alert alert-danger" }, props.error),
-            h("form", { action: "/login", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
+            loginError && h("p", { className: "alert alert-danger" }, loginError),
+            h("form", { action: "/login", method: "post", className: "react-stack", onSubmit: onSubmit || handleSubmitOnce }, [
                 Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
                 Field({ name: "password", type: "password", placeholder: "\u041f\u0430\u0440\u043e\u043b\u044c", required: true }),
                 h("button", { className: "react-btn", type: "submit" }, "\u0412\u043e\u0439\u0442\u0438")
             ]),
-            h("div", { className: "react-stack", style: { marginTop: 16 } }, [
-                h("p", { key: "forgot" }, A({ href: "/forgot-password" }, "\u0417\u0430\u0431\u044b\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c?")),
-                h("p", { key: "buyer" }, ["\u041d\u0435\u0442 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430? ", A({ href: "/register" }, "\u0417\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f")]),
-                h("p", { key: "seller" }, ["\u0425\u043e\u0442\u0438\u0442\u0435 \u043f\u0440\u043e\u0434\u0430\u0432\u0430\u0442\u044c \u043d\u0430 \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0435? ", A({ href: "/become-seller", onClick: onBecomeSellerRequest }, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c")])
+            h("div", { className: "react-auth-links" }, [
+                h("p", { key: "forgot" }, AuthLink({ href: "/forgot-password", onClick: event => { event.preventDefault(); onSwitch("forgot_password"); } }, "\u0417\u0430\u0431\u044b\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c?")),
+                h("p", { key: "buyer" }, ["\u041d\u0435\u0442 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430? ", AuthLink({ href: "/register", onClick: event => { event.preventDefault(); onSwitch("register"); } }, "\u0417\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f")])
+            ])
+        ];
+    }
+    function AuthModal({ open, onClose, title, subtitle, children, className, wide }) {
+        if (!open) return null;
+        const cardClassName = ["react-auth-card", className, wide ? "react-auth-card-wide" : "react-auth-card-modal"].filter(Boolean).join(" ");
+        return h("div", { className: "react-modal-overlay react-auth-overlay", onClick: onClose }, [
+            h("section", {
+                key: "dialog",
+                className: cardClassName,
+                role: "dialog",
+                "aria-modal": "true",
+                "aria-label": title,
+                onClick: event => event.stopPropagation()
+            }, [
+                h("button", { key: "close", type: "button", className: "react-auth-close", "aria-label": "\u0417\u0430\u043a\u0440\u044b\u0442\u044c", onClick: onClose }, "\u00d7"),
+                h("div", { key: "body", className: "react-auth-card-body" }, [
+                    h("header", { key: "header", className: "react-auth-header" }, [
+                        h("h1", { key: "title", className: "react-auth-title" }, title),
+                        subtitle ? h("p", { key: "subtitle", className: "react-auth-subtitle" }, subtitle) : null
+                    ]),
+                    ...(children || [])
+                ])
             ])
         ]);
     }
-    function ForgotPasswordPage() {
-        return h("div", { className: "react-panel", style: { maxWidth: 520, margin: "0 auto" } }, [
-            h("h1", null, "\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c"),
-            h("p", { className: "react-muted" }, "\u0423\u043a\u0430\u0436\u0438\u0442\u0435 email, \u0438 \u043c\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043c \u0441\u0441\u044b\u043b\u043a\u0443 \u0434\u043b\u044f \u0441\u0431\u0440\u043e\u0441\u0430."),
-            props.error && h("p", { className: "alert alert-danger" }, props.error),
-            h("form", { action: "/forgot-password", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
-                Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
-                h("button", { className: "react-btn", type: "submit" }, "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c")
-            ]),
-            h("p", { style: { marginTop: 16 } }, A({ href: "/login" }, "\u0412\u0435\u0440\u043d\u0443\u0442\u044c\u0441\u044f \u043a\u043e \u0432\u0445\u043e\u0434\u0443"))
-        ]);
+    function AuthViewConfig(view) {
+        return {
+            login: {
+                title: "\u0412\u0445\u043e\u0434",
+                subtitle: "\u0412\u043e\u0439\u0434\u0438\u0442\u0435, \u0447\u0442\u043e\u0431\u044b \u043f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c \u043f\u043e\u043a\u0443\u043f\u043a\u0438 \u0438 \u0443\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u043e\u043c.",
+                wide: false,
+                className: ""
+            },
+            forgot_password: {
+                title: "\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c",
+                subtitle: "\u0423\u043a\u0430\u0436\u0438\u0442\u0435 email, \u0438 \u043c\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043c \u0441\u0441\u044b\u043b\u043a\u0443 \u0434\u043b\u044f \u0441\u0431\u0440\u043e\u0441\u0430.",
+                wide: false,
+                className: "react-auth-card-slim"
+            },
+            forgot_password_sent: {
+                title: "\u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u043f\u043e\u0447\u0442\u0443",
+                subtitle: "\u0415\u0441\u043b\u0438 email \u0435\u0441\u0442\u044c \u0432 \u0441\u0438\u0441\u0442\u0435\u043c\u0435, \u043c\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043b\u0438 \u0441\u0441\u044b\u043b\u043a\u0443 \u0434\u043b\u044f \u0441\u0431\u0440\u043e\u0441\u0430 \u043f\u0430\u0440\u043e\u043b\u044f.",
+                wide: false,
+                className: "react-auth-card-slim"
+            },
+            reset_password: {
+                title: "\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c",
+                subtitle: "\u0417\u0430\u0434\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c \u0434\u043b\u044f \u0432\u0445\u043e\u0434\u0430 \u0432 \u0430\u043a\u043a\u0430\u0443\u043d\u0442.",
+                wide: false,
+                className: "react-auth-card-slim"
+            },
+            register: {
+                title: "\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044f",
+                subtitle: "\u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u0430\u043a\u043a\u0430\u0443\u043d\u0442 \u0434\u043b\u044f \u043f\u043e\u043a\u0443\u043f\u043e\u043a \u0438 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u043d\u0438\u044f \u0437\u0430\u043a\u0430\u0437\u043e\u0432.",
+                wide: true,
+                className: "react-auth-card-wide"
+            },
+            become_seller: {
+                title: "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c",
+                subtitle: "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043a\u043e\u0440\u043e\u0442\u043a\u0443\u044e \u0437\u0430\u044f\u0432\u043a\u0443. \u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b \u0441\u0432\u044f\u0436\u0435\u0442\u0441\u044f \u0441 \u0432\u0430\u043c\u0438 \u0434\u043b\u044f \u0443\u0442\u043e\u0447\u043d\u0435\u043d\u0438\u044f \u0434\u0430\u043d\u043d\u044b\u0445 \u0438 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f.",
+                wide: true,
+                className: "react-auth-card-wide"
+            }
+        }[view] || {
+            title: "\u0412\u0445\u043e\u0434",
+            subtitle: "",
+            wide: false,
+            className: ""
+        };
     }
-    function ForgotPasswordSentPage() {
-        return h("section", { className: "react-panel react-stack", style: { maxWidth: 640, margin: "0 auto" } }, [
-            h("h1", null, "\u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u043f\u043e\u0447\u0442\u0443"),
-            h("p", null, "\u0415\u0441\u043b\u0438 email \u0435\u0441\u0442\u044c \u0432 \u0441\u0438\u0441\u0442\u0435\u043c\u0435, \u043c\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043b\u0438 \u0441\u0441\u044b\u043b\u043a\u0443 \u0434\u043b\u044f \u0441\u0431\u0440\u043e\u0441\u0430 \u043f\u0430\u0440\u043e\u043b\u044f."),
-            props.mail_sent === false && props.reset_link ? h("p", { className: "react-muted" }, "\u0414\u043b\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0434\u0435\u043c\u043e-\u0441\u0440\u0435\u0434\u044b SMTP \u043d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0441\u044b\u043b\u043a\u0430 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0430 \u043d\u0438\u0436\u0435.") : null,
-            props.reset_link ? ButtonLink({ href: props.reset_link }, "\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c") : null,
-            ButtonLink({ href: "/login", className: "secondary" }, "\u041a\u043e \u0432\u0445\u043e\u0434\u0443")
-        ]);
-    }
-    function ResetPasswordPage() {
-        const canSubmit = Boolean(props.token);
-        return h("div", { className: "react-panel", style: { maxWidth: 520, margin: "0 auto" } }, [
-            h("h1", null, "\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c"),
-            props.error && h("p", { className: "alert alert-danger" }, props.error),
-            canSubmit ? h("form", { action: "/reset-password", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
-                h("input", { name: "token", type: "hidden", value: props.token }),
-                Field({ name: "password", type: "password", placeholder: "\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
-                Field({ name: "password_confirm", type: "password", placeholder: "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u043f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
-                h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
-            ]) : ButtonLink({ href: "/forgot-password" }, "\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u043d\u043e\u0432\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443"),
-            h("p", { style: { marginTop: 16 } }, A({ href: "/login" }, "\u041a\u043e \u0432\u0445\u043e\u0434\u0443"))
-        ]);
-    }
-    function AuthTabs({ active, onBecomeSellerRequest }) {
+    function AuthTabs({ active, onSwitch }) {
         return h("div", { className: "react-tab-row", style: { marginBottom: 18 } }, [
-            ButtonLink({ href: "/register", className: active === "buyer" ? "" : "secondary", key: "buyer" }, "\u041f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c"),
-            A({ href: "/become-seller", onClick: onBecomeSellerRequest, className: `react-btn ${active === "seller" ? "" : "secondary"}` }, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c")
+            h("button", { key: "buyer", type: "button", className: `react-btn ${active === "buyer" ? "" : "secondary"}`, onClick: () => onSwitch("register") }, "\u041f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044c"),
+            h("button", { key: "seller", type: "button", className: `react-btn ${active === "seller" ? "" : "secondary"}`, onClick: () => onSwitch("become_seller") }, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c")
         ]);
     }
-    function RegisterPage({ onBecomeSellerRequest }) {
-        return h("div", { className: "react-panel", style: { maxWidth: 560, margin: "0 auto" } }, [
-            h(AuthTabs, { active: "buyer", onBecomeSellerRequest }),
-            h("h1", null, "\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u044f \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044f"),
-            props.error && h("p", { className: "alert alert-danger" }, props.error),
-            h("form", { action: "/register", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
+    function AuthViewBody({ view, onSwitch, submitLoginInline, loginError }) {
+        if (view === "forgot_password") {
+            return [
+                props.error && h("p", { className: "alert alert-danger" }, props.error),
+                h("form", { action: "/forgot-password", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
+                    Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
+                    h("button", { className: "react-btn", type: "submit" }, "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c")
+                ]),
+                h("div", { className: "react-auth-links" }, [
+                    h("p", null, AuthLink({ href: "/login", onClick: event => { event.preventDefault(); onSwitch("login"); } }, "\u0412\u0435\u0440\u043d\u0443\u0442\u044c\u0441\u044f \u043a \u0432\u0445\u043e\u0434\u0443"))
+                ])
+            ];
+        }
+        if (view === "forgot_password_sent") {
+            return [
+                props.mail_sent === false && props.reset_link ? h("p", { className: "react-muted" }, "\u0414\u043b\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0434\u0435\u043c\u043e-\u0441\u0440\u0435\u0434\u044b SMTP \u043d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0441\u044b\u043b\u043a\u0430 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0430 \u043d\u0438\u0436\u0435.") : null,
+                props.reset_link ? ButtonLink({ href: props.reset_link }, "\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u043f\u0430\u0440\u043e\u043b\u044c") : null,
+                h("button", { type: "button", className: "react-btn secondary", key: "back", onClick: () => onSwitch("login") }, "\u041a\u043e \u0432\u0445\u043e\u0434\u0443")
+            ];
+        }
+        if (view === "reset_password") {
+            const canSubmit = Boolean(props.token);
+            return [
+                props.error && h("p", { className: "alert alert-danger" }, props.error),
+                canSubmit ? h("form", { action: "/reset-password", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
+                    h("input", { name: "token", type: "hidden", value: props.token }),
+                    Field({ name: "password", type: "password", placeholder: "\u041d\u043e\u0432\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
+                    Field({ name: "password_confirm", type: "password", placeholder: "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u0435 \u043f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
+                    h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
+                ]) : h("button", { type: "button", className: "react-btn", onClick: () => onSwitch("forgot_password") }, "\u0417\u0430\u043f\u0440\u043e\u0441\u0438\u0442\u044c \u043d\u043e\u0432\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443"),
+                h("div", { className: "react-auth-links" }, [
+                    h("p", null, AuthLink({ href: "/login", onClick: event => { event.preventDefault(); onSwitch("login"); } }, "\u041a\u043e \u0432\u0445\u043e\u0434\u0443"))
+                ])
+            ];
+        }
+        if (view === "register") {
+            return [
+                h(AuthTabs, { active: "buyer", onSwitch }),
+                props.error && h("p", { className: "alert alert-danger" }, props.error),
+                h("form", { action: "/register", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
+                    Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
+                    Field({ name: "password", type: "password", placeholder: "\u041f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
+                    h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442")
+                ]),
+                h("div", { className: "react-auth-links" }, [
+                    h("p", null, AuthLink({ href: "/login", onClick: event => { event.preventDefault(); onSwitch("login"); } }, "\u0423\u0436\u0435 \u0435\u0441\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442? \u0412\u043e\u0439\u0442\u0438")),
+                    h("p", { className: "react-muted" }, "\u0414\u043b\u044f \u043f\u0440\u043e\u0434\u0430\u0436 \u043d\u0430 \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u0443\u044e \u0430\u043d\u043a\u0435\u0442\u0443 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430.")
+                ])
+            ];
+        }
+        if (view === "become_seller") {
+            return [
+                props.error && h("p", { className: "alert alert-danger" }, props.error),
+                h(SellerApplicationForm, { compact: false })
+            ];
+        }
+        return [
+            props.password_reset_success && h("p", { className: "alert alert-success" }, "\u041f\u0430\u0440\u043e\u043b\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d. \u0412\u043e\u0439\u0434\u0438\u0442\u0435 \u0441 \u043d\u043e\u0432\u044b\u043c \u043f\u0430\u0440\u043e\u043b\u0435\u043c."),
+            loginError && h("p", { className: "alert alert-danger" }, loginError),
+            h("form", { action: "/login", method: "post", className: "react-stack", onSubmit: submitLoginInline || handleSubmitOnce }, [
                 Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
-                Field({ name: "password", type: "password", placeholder: "\u041f\u0430\u0440\u043e\u043b\u044c", required: true, minLength: 6 }),
-                h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442")
+                Field({ name: "password", type: "password", placeholder: "\u041f\u0430\u0440\u043e\u043b\u044c", required: true }),
+                h("button", { className: "react-btn", type: "submit" }, "\u0412\u043e\u0439\u0442\u0438")
             ]),
-            h("p", { className: "react-muted", style: { marginTop: 14 } }, "\u0414\u043b\u044f \u043f\u0440\u043e\u0434\u0430\u0436 \u043d\u0430 \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0435 \u043e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u0443\u044e \u0430\u043d\u043a\u0435\u0442\u0443 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430.")
-        ]);
+            h("div", { className: "react-auth-links" }, [
+                h("p", { key: "forgot" }, AuthLink({ href: "/forgot-password", onClick: event => { event.preventDefault(); onSwitch("forgot_password"); } }, "\u0417\u0430\u0431\u044b\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c?")),
+                h("p", { key: "buyer" }, ["\u041d\u0435\u0442 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430? ", AuthLink({ href: "/register", onClick: event => { event.preventDefault(); onSwitch("register"); } }, "\u0417\u0430\u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c\u0441\u044f")])
+            ])
+        ];
     }
-    function BecomeSellerPage() {
-        return h("div", { className: "react-panel", style: { maxWidth: 820, margin: "0 auto" } }, [
-            h(AuthTabs, { active: "seller" }),
-            h("h1", null, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c"),
-            h("p", { className: "react-muted" }, "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043a\u043e\u0440\u043e\u0442\u043a\u0443\u044e \u0437\u0430\u044f\u0432\u043a\u0443. \u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b \u0441\u0432\u044f\u0436\u0435\u0442\u0441\u044f \u0441 \u0432\u0430\u043c\u0438 \u0434\u043b\u044f \u0443\u0442\u043e\u0447\u043d\u0435\u043d\u0438\u044f \u0434\u0430\u043d\u043d\u044b\u0445 \u0438 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f."),
-            props.error && h("p", { className: "alert alert-danger" }, props.error),
-            h(SellerApplicationForm, { compact: false })
-        ]);
+    function AuthFlowModal({ open, view, onClose, onSwitch }) {
+        const [loginError, setLoginError] = React.useState("");
+        React.useEffect(() => {
+            if (!open) return undefined;
+            const handleKeyDown = event => {
+                if (event.key === "Escape") onClose();
+            };
+            window.addEventListener("keydown", handleKeyDown);
+            return () => window.removeEventListener("keydown", handleKeyDown);
+        }, [open, onClose]);
+        React.useEffect(() => {
+            if (view !== "login") {
+                setLoginError("");
+            }
+        }, [view]);
+        const submitLoginInline = React.useCallback(async event => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            if (!form || typeof window.fetch !== "function") {
+                form.submit();
+                return;
+            }
+            setLoginError("");
+            try {
+                const formData = new FormData(form);
+                const response = await fetch("/login", {
+                    method: "POST",
+                    body: formData,
+                    credentials: "same-origin"
+                });
+                const finalUrl = response.url || "";
+                if (finalUrl && !finalUrl.endsWith("/login")) {
+                    window.location.assign(finalUrl);
+                    return;
+                }
+                const html = await response.text();
+                let nextError = "Неверный email или пароль";
+                try {
+                    const doc = new DOMParser().parseFromString(html, "text/html");
+                    const alert = doc.querySelector(".alert-danger");
+                    if (alert && alert.textContent) {
+                        nextError = alert.textContent.trim();
+                    }
+                } catch (_err) {}
+                setLoginError(nextError);
+            } catch (_err) {
+                setLoginError("Не удалось войти. Проверьте логин и пароль и попробуйте ещё раз.");
+            }
+        }, []);
+        if (!open || !view) return null;
+        const meta = AuthViewConfig(view);
+        return AuthModal({
+            open,
+            onClose,
+            title: meta.title,
+            subtitle: meta.subtitle,
+            className: meta.className,
+            wide: meta.wide,
+            children: [h("div", { className: "react-auth-body" }, AuthViewBody({ view, onSwitch, submitLoginInline, loginError }))]
+        });
     }
     function SellerPendingPage() {
         const status = props.application_status || "pending";
@@ -1218,12 +1727,29 @@
         const hasMinOrderErrors = minOrderShortage > 0;
         const minOrderText = `Минимальная сумма заказа: ${money(minOrderAmount)}`;
         const minOrderMessage = props.min_order_message || `Минимальная сумма заказа — ${money(minOrderAmount)}. Добавьте товары еще на ${money(minOrderShortage)}.`;
+        const activeGroups = groups.filter(group => (group.cart_items || []).length > 0);
+        const multipleSellers = activeGroups.length > 1;
+        const sellerOrderButtons = activeGroups.map(group => {
+            const groupSubtotal = Number(group.subtotal || 0);
+            const groupShortage = Math.max(0, Number(group.shortage || 0));
+            const groupDisabled = groupShortage > 0;
+            const sellerName = group.seller_name || "Продавец";
+            const buttonLabel = multipleSellers ? `Оформить у ${sellerName}` : "Оформить заказ";
+            const buttonValue = group.seller_id === null || group.seller_id === undefined ? "__none__" : String(group.seller_id);
+            return h("div", { key: `checkout-${buttonValue}`, className: "react-cart-seller-checkout" }, [
+                multipleSellers && h("div", { className: "react-cart-summary-row" }, [h("span", null, sellerName), h("b", null, money(groupSubtotal + deliveryFee))]),
+                h("button", {
+                    className: `react-btn react-cart-submit ${groupDisabled ? "is-disabled" : ""}`,
+                    type: "submit",
+                    name: "seller_id",
+                    value: buttonValue,
+                    disabled: groupDisabled,
+                    "aria-disabled": groupDisabled ? "true" : "false"
+                }, buttonLabel),
+                groupDisabled && h("span", { className: "react-cart-min-order-warning" }, `Добавьте товары у этого продавца еще на ${money(groupShortage)}.`)
+            ]);
+        });
         const handleCheckoutSubmit = event => {
-            if (hasMinOrderErrors) {
-                event.preventDefault();
-                setMinOrderNoticeOpen(true);
-                return false;
-            }
             return handleSubmitOnce(event);
         };
         return h(React.Fragment, null, [
@@ -1231,17 +1757,28 @@
             props.cart_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.cart_error),
             props.cart_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.cart_success),
             hasItems ? h("div", { className: "react-cart-layout" }, [
-                h("section", { className: "react-panel react-cart-main" }, [
-                    h("div", { className: "react-cart-items" }, groups.flatMap(group => {
+                h("section", { className: "react-cart-main" }, [
+                    h("div", { className: "react-cart-items" }, groups.map(group => {
                         const sellerName = group.seller_name || "\u041f\u0440\u043e\u0434\u0430\u0432\u0435\u0446";
-                        return (group.cart_items || []).map(item => h(CartItemRow, { key: `${group.seller_id}-${item.id}`, item, sellerName }));
+                        const groupItems = group.cart_items || [];
+                        const groupShortage = Math.max(0, Number(group.shortage || 0));
+                        return h("div", { key: `seller-${group.seller_id}`, className: "react-panel react-cart-seller-group" }, [
+                            h("div", { className: "react-cart-seller-row" }, [
+                                h("b", null, sellerName),
+                                h("span", { className: "react-muted" }, `${groupItems.length} поз.`),
+                                h("strong", null, money(Number(group.subtotal || 0)))
+                            ]),
+                            groupShortage > 0 && h("span", { className: "react-cart-min-order-warning" }, `До минимального заказа у продавца: ${money(groupShortage)}.`),
+                            h("div", { className: "react-cart-seller-items" }, groupItems.map(item => h(CartItemRow, { key: `${group.seller_id}-${item.id}`, item, sellerName })))
+                        ]);
                     }))
                 ]),
                 h("aside", { className: "react-panel react-cart-summary" }, [
                     h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u041a\u043e\u043b-\u0432\u043e \u0442\u043e\u0432\u0430\u0440\u043e\u0432"), h("b", null, totalCount)]),
                     h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0421\u0443\u043c\u043c\u0430 \u0442\u043e\u0432\u0430\u0440\u043e\u0432"), h("b", null, money(goodsTotal))]),
-                    h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"), h("b", null, money(deliveryFee))]),
-                    h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0418\u0442\u043e\u0433"), h("b", null, money(grandTotal))]),
+                    h("div", { className: "react-cart-summary-row" }, [h("span", null, multipleSellers ? "Доставка за заказ" : "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"), h("b", null, money(deliveryFee))]),
+                    !multipleSellers && h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0418\u0442\u043e\u0433"), h("b", null, money(grandTotal))]),
+                    multipleSellers && h("p", { className: "react-muted react-cart-min-order" }, "В корзине товары разных продавцов. Оформите их отдельными заказами."),
                     h("form", { action: "/order/create", method: "post", className: "react-cart-checkout-form", onSubmit: handleCheckoutSubmit }, [
                         h("div", { className: "react-form-grid" }, [
                             Field({ name: "full_name", placeholder: "\u0424\u0418\u041e \u043f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u044f", defaultValue: checkout.full_name || (user && user.full_name) || "", required: true, maxLength: 255 }),
@@ -1279,13 +1816,9 @@
                             ]),
                             Textarea({ name: "comment", placeholder: "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u043a \u0437\u0430\u043a\u0430\u0437\u0443", defaultValue: checkout.comment || "", className: "wide", rows: 4, maxLength: 2000 })
                         ]),
-                        h("button", {
-                            className: `react-btn react-cart-submit ${hasMinOrderErrors ? "is-disabled" : ""}`,
-                            type: "submit",
-                            "aria-disabled": hasMinOrderErrors ? "true" : "false"
-                        }, "\u041e\u0444\u043e\u0440\u043c\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437"),
+                        h("div", { className: "react-cart-submit-stack" }, sellerOrderButtons),
                         minOrderText && h("p", { className: "react-muted react-cart-min-order" }, minOrderText),
-                        hasMinOrderErrors && h("span", { className: "react-cart-min-order-warning" }, minOrderMessage)
+                        !multipleSellers && hasMinOrderErrors && h("span", { className: "react-cart-min-order-warning" }, minOrderMessage)
                     ]),
                     h("div", { className: "react-cart-clear-wrap" }, [
                         PostButton({ action: "/cart/clear", children: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u043a\u043e\u0440\u0437\u0438\u043d\u0443", className: "react-btn secondary", confirmMessage: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u043a\u043e\u0440\u0437\u0438\u043d\u0443?" })
@@ -1305,7 +1838,7 @@
         const products = props.products || [];
         const seller = props.seller || {};
         const certificates = props.certificates || [];
-        const [tab, setTab] = React.useState("overview");
+        const [tab, setTab] = React.useState(props.initial_tab || (page === "seller_settings" ? "profile" : "overview"));
         const [productFilter, setProductFilter] = React.useState("all");
         const activeProducts = products.filter(product => product.status === "approved");
         const pendingProducts = products.filter(product => product.status === "pending");
@@ -1356,7 +1889,6 @@
             h("div", { className: "react-page-title" }, [
                 h("h1", null, "\u041a\u0430\u0431\u0438\u043d\u0435\u0442 \u0444\u0435\u0440\u043c\u0435\u0440\u0430"),
                 h("div", { className: "react-actions" }, [
-                    ButtonLink({ href: "/seller/settings", className: "secondary" }, "\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438"),
                     ButtonLink({ href: "/seller/orders", className: "secondary" }, "\u0417\u0430\u043a\u0430\u0437\u044b")
                 ])
             ]),
@@ -1636,13 +2168,18 @@
             h("h2", null, "\u0422\u043e\u0432\u0430\u0440\u044b"),
             h("table", { className: "react-table" }, h("tbody", null, (products || []).map(p => {
                 const status = stockStatus(p);
-                return h("tr", { key: p.id, className: `stock-row stock-${status}` }, [
+                const productHref = `/product/${p.id}`;
+                const rowProps = interactiveRowProps(productHref);
+                rowProps.key = p.id;
+                rowProps.className = `${rowProps.className} stock-row stock-${status}`;
+                return h("tr", rowProps, [
                     h("td", null, A({ href: `/product/${p.id}` }, p.name)),
                     h("td", null, h(PriceDisplay, { product: p, compact: true, inline: true })),
                     h("td", null, p.category),
                     h("td", null, h("span", { className: `react-stock-pill stock-${status}` }, stockText(p))),
-                    h("td", null, p.status || "approved"),
+                    h("td", null, productStatusText(p.status)),
                     h("td", null, h("div", { className: "react-actions" }, [
+                        ButtonLink({ href: productHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c"),
                         seller && A({ href: `/seller/product/edit/${p.id}`, className: "react-btn secondary" }, "\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c"),
                         PostButton({ action: `${seller ? "/seller" : "/admin"}/product/delete/${p.id}`, children: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c", className: "react-btn danger", confirmMessage: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440?" })
                     ]))
@@ -1685,7 +2222,7 @@
                 h("div", { className: "react-page-title" }, [h("h2", null, "\u041e\u0442\u0437\u044b\u0432\u044b")]),
                 (props.reviews || []).length
                     ? h("div", { className: "react-stack" }, (props.reviews || []).map(r => h("div", { key: r.id, className: "react-card" }, [
-                        h("div", null, "в…".repeat(r.rating || 5)),
+                        h("div", { className: "react-review-stars", "aria-label": `\u041e\u0446\u0435\u043d\u043a\u0430 ${r.rating || 0} \u0438\u0437 5` }, renderStars(r.rating || 0)),
                         h("p", null, r.text || "")
                     ])))
                     : h("div", { className: "react-empty" }, "\u041e\u0442\u0437\u044b\u0432\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
@@ -1770,13 +2307,14 @@
             ]))
         ]);
     }
-    function OrdersPage() {
+    function OrdersPage(options = {}) {
+        const orderList = options.limit ? (props.orders || []).slice(0, options.limit) : (props.orders || []);
         return h(React.Fragment, null, [
-            h("div", { className: "react-page-title" }, h("h1", null, "\u041c\u043e\u0438 \u0437\u0430\u043a\u0430\u0437\u044b")),
-            props.order_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.order_success),
-            props.payment_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.payment_success),
-            props.payment_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.payment_error),
-            (props.orders || []).length ? (props.orders || []).map(order => {
+            options.showTitle === false ? null : h("div", { className: "react-page-title" }, h("h1", null, "\u041c\u043e\u0438 \u0437\u0430\u043a\u0430\u0437\u044b")),
+            options.hideMessages ? null : props.order_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.order_success),
+            options.hideMessages ? null : props.payment_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.payment_success),
+            options.hideMessages ? null : props.payment_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.payment_error),
+            orderList.length ? orderList.map(order => {
                 const items = order.items || [];
                 const goodsTotal = items.reduce((sum, item) => sum + (item.product ? productFinalPrice(item.product) * Number(item.quantity || 0) : 0), 0);
                 const discount = Number(order.discount_amount || 0);
@@ -1805,10 +2343,10 @@
                 order.seller_cancel_reason && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, `\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u043e\u0442\u043c\u0435\u043d\u044b: ${order.seller_cancel_reason}`),
                 h("table", { className: "react-table" }, h("tbody", null, items.map(item => h("tr", { key: item.id }, [h("td", null, item.product ? h(ProductMiniPreview, { product: item.product }) : "\u0422\u043e\u0432\u0430\u0440"), h("td", null, item.quantity), h("td", null, item.product ? h(PriceDisplay, { product: item.product, compact: true, inline: true }) : ""), h("td", null, item.product ? money(productFinalPrice(item.product) * Number(item.quantity || 0)) : "")])))),
                 h("div", { className: "react-actions" }, [
-                    order.payment_status === "pending" && order.selected_payment_method === "yookassa" && ButtonLink({ href: `/payment/${order.id}` }, "\u041e\u043f\u043b\u0430\u0442\u0438\u0442\u044c"),
-                    order.payment_status === "pending" && order.selected_payment_method === "wallet" && PostButton({ action: `/order/${order.id}/pay`, children: "\u041e\u043f\u043b\u0430\u0442\u0438\u0442\u044c" }),
-                    order.payment_status === "pending" && order.status === "created" && h(CancelOrderButton, { action: `/order/${order.id}/cancel`, children: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c" }),
-                    ["paid", "assembling", "delivering"].includes(order.status) && PostButton({ action: `/order/${order.id}/complete`, children: "\u041f\u043e\u043b\u0443\u0447\u0435\u043d\u043e", confirmMessage: "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u0435 \u0437\u0430\u043a\u0430\u0437\u0430?" }),
+                    isOrderPayable(order) && order.selected_payment_method === "yookassa" && ButtonLink({ href: `/payment/${order.id}` }, "\u041e\u043f\u043b\u0430\u0442\u0438\u0442\u044c"),
+                    isOrderPayable(order) && order.selected_payment_method === "wallet" && PostButton({ action: `/order/${order.id}/pay`, children: "\u041e\u043f\u043b\u0430\u0442\u0438\u0442\u044c" }),
+                    isOrderPayable(order) && h(CancelOrderButton, { action: `/order/${order.id}/cancel`, children: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c" }),
+                    isOrderReceivable(order) && PostButton({ action: `/order/${order.id}/complete`, children: "\u041f\u043e\u043b\u0443\u0447\u0435\u043d\u043e", confirmMessage: "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u0435 \u0437\u0430\u043a\u0430\u0437\u0430?" }),
                     PostButton({ action: `/order/${order.id}/repeat`, children: "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437", className: "react-btn secondary" }),
                     ButtonLink({ href: `/order/${order.id}/receipt`, className: "secondary" }, "\u041a\u0432\u0438\u0442\u0430\u043d\u0446\u0438\u044f"),
                     user && user.role === "user" && (order.items || []).reduce((acc, item) => {
@@ -1821,13 +2359,20 @@
                 h(ProductReviewForms, { order }),
                 h(SellerReviewForms, { order })
             ]);
-            }) : h("div", { className: "react-empty react-panel" }, "\u0417\u0430\u043a\u0430\u0437\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
+            }) : h("div", { className: "react-empty react-panel" }, options.emptyText || "\u0417\u0430\u043a\u0430\u0437\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
         ]);
     }
     function ProfilePage() {
+        const orders = props.orders || [];
+        const activeOrders = orders.filter(order => !["completed", "canceled", "refunded"].includes(order.status || "")).length;
         return h(React.Fragment, null, [
             h("div", { className: "react-page-title" }, h("h1", null, "\u041b\u0438\u0447\u043d\u044b\u0439 \u043a\u0430\u0431\u0438\u043d\u0435\u0442")),
             props.profile_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.profile_success),
+            h("section", { className: "react-info-grid" }, [
+                h("div", { className: "react-card" }, [h("b", null, "\u0417\u0430\u043a\u0430\u0437\u044b"), h("p", null, orders.length), h("p", { className: "react-muted" }, "\u0412\u0441\u0435\u0433\u043e")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0412 \u0440\u0430\u0431\u043e\u0442\u0435"), h("p", null, activeOrders), h("p", { className: "react-muted" }, "\u0416\u0434\u0443\u0442 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0439")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u041a\u043e\u043d\u0442\u0430\u043a\u0442"), h("p", null, user && (user.full_name || user.email) || "-"), h("p", { className: "react-muted" }, user && user.phone || "\u0422\u0435\u043b\u0435\u0444\u043e\u043d \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d")])
+            ]),
             h("section", { className: "react-panel" }, [
                 h("h2", null, "\u041a\u043e\u043d\u0442\u0430\u043a\u0442\u044b"),
                 h("form", { action: "/profile/update", method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
@@ -1837,10 +2382,17 @@
                 ])
             ]),
             h("div", { className: "react-actions", style: { marginTop: 16 } }, [
+                ButtonLink({ href: "/order/orders", className: "secondary" }, "\u0412\u0441\u0435 \u0437\u0430\u043a\u0430\u0437\u044b"),
                 ButtonLink({ href: "/complaints/my", className: "secondary" }, "\u041c\u043e\u0438 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u044f"),
                 ButtonLink({ href: "/conversations/", className: "secondary" }, "\u041c\u043e\u0438 \u0447\u0430\u0442\u044b")
             ]),
-            h(OrdersPage)
+            h("section", { className: "react-stack", style: { marginTop: 20 } }, [
+                h("div", { className: "react-page-title" }, [
+                    h("h2", null, "\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0435 \u0437\u0430\u043a\u0430\u0437\u044b"),
+                    orders.length > 3 ? ButtonLink({ href: "/order/orders", className: "secondary" }, "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0432\u0441\u0435") : null
+                ]),
+                h(OrdersPage, { limit: 3, showTitle: false, hideMessages: true })
+            ])
         ]);
     }
     function SellerStatusActions(order) {
@@ -1924,7 +2476,7 @@
                 ]),
                 h("div", { className: "react-chip-row" }, [
                     h("span", { className: `react-chip react-status-chip status-${order.status || "created"}` }, (props.status_labels && props.status_labels[order.status]) || order.status || "created"),
-                    h("span", { className: `react-chip react-status-chip payment-${order.payment_status || "pending"}` }, `\u041e\u043f\u043b\u0430\u0442\u0430: ${order.payment_status || "pending"}`)
+                    h("span", { className: `react-chip react-status-chip payment-${order.payment_status || "pending"}` }, `\u041e\u043f\u043b\u0430\u0442\u0430: ${paymentStatusText(order.payment_status)}`)
                 ]),
                 h("div", { className: "react-info-grid react-order-meta-grid" }, [
                     h("div", { className: "react-card" }, [
@@ -1983,7 +2535,7 @@
     function TransactionsTable({ transactions }) {
         return h("section", { className: "react-panel" }, [
             h("div", { className: "react-page-title" }, [h("h2", null, "\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u0438"), ButtonLink({ href: "/payment/transactions", className: "secondary" }, "\u0418\u0441\u0442\u043e\u0440\u0438\u044f")]),
-            h("table", { className: "react-table" }, h("tbody", null, (transactions || []).map(t => h("tr", { key: t.id }, [h("td", null, dateText(t.created_at)), h("td", null, t.type), h("td", null, money(t.amount)), h("td", null, t.status), h("td", null, t.description || "")]))))
+            h("table", { className: "react-table" }, h("tbody", null, (transactions || []).map(t => h("tr", { key: t.id }, [h("td", null, dateText(t.created_at)), h("td", null, transactionTypeText(t.type)), h("td", null, money(t.amount)), h("td", null, h(StatusChip, { value: t.status, label: transactionStatusText(t.status) })), h("td", null, t.description || "")]))))
         ]);
     }
     function PaymentPage() {
@@ -2032,7 +2584,7 @@
                     h("div", { className: "react-card" }, [h("b", null, "\u041d\u043e\u043c\u0435\u0440 \u0437\u0430\u043a\u0430\u0437\u0430"), h("p", null, orderDisplayNumber(order))]),
                     h("div", { className: "react-card" }, [h("b", null, "\u0414\u0430\u0442\u0430"), h("p", null, dateText(order.created_at) || "-")]),
                     h("div", { className: "react-card" }, [h("b", null, "\u0421\u043f\u043e\u0441\u043e\u0431 \u043e\u043f\u043b\u0430\u0442\u044b"), h("p", null, paymentMethodText(order.selected_payment_method) || "-")]),
-                    h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441 \u043e\u043f\u043b\u0430\u0442\u044b"), h("p", null, order.payment_status || "-")])
+                    h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441 \u043e\u043f\u043b\u0430\u0442\u044b"), h("p", null, paymentStatusText(order.payment_status))])
                 ]),
                 h("div", { className: "react-page-title", style: { marginTop: 20 } }, [
                     h("h2", null, "\u0421\u043e\u0441\u0442\u0430\u0432 \u0437\u0430\u043a\u0430\u0437\u0430"),
@@ -2056,7 +2608,21 @@
                 h("h1", null, page === "notifications_admin" ? "\u0420\u0430\u0441\u0441\u044b\u043b\u043a\u0438" : "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f"),
                 page !== "notifications_admin" && PostButton({ action: "/notifications/mark-all-read", children: "\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u0442\u044c \u0432\u0441\u0435", className: "react-btn secondary" })
             ]),
-            page === "notifications_admin" && h("form", { action: "/notifications/admin/create", method: "post", className: "react-panel react-form-grid", onSubmit: handleSubmitOnce }, [Select({ name: "type" }, [h("option", { value: "email" }, "Email"), h("option", { value: "push" }, "Push")]), Field({ name: "subject", placeholder: "\u0422\u0435\u043c\u0430", required: true, maxLength: 500 }), Textarea({ name: "body", placeholder: "\u0422\u0435\u043a\u0441\u0442", className: "wide", required: true, maxLength: 4000 }), h("button", { className: "react-btn wide", type: "submit" }, "\u0421\u043e\u0437\u0434\u0430\u0442\u044c")]),
+            props.notification_success && h("div", { className: "alert alert-success" }, props.notification_success),
+            props.notification_error && h("div", { className: "alert alert-danger" }, props.notification_error),
+            page === "notifications_admin" && h("form", { action: "/notifications/admin/broadcast", method: "post", className: "react-panel react-form-grid", onSubmit: handleSubmitOnce }, [
+                Select({ name: "type", defaultValue: "push" }, [h("option", { value: "push" }, "Push"), h("option", { value: "email" }, "Email")]),
+                Select({ name: "target_role", defaultValue: "all" }, [
+                    h("option", { value: "all" }, "\u0412\u0441\u0435"),
+                    h("option", { value: "user" }, "\u041f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u0438"),
+                    h("option", { value: "seller" }, "\u0424\u0435\u0440\u043c\u0435\u0440\u044b"),
+                    h("option", { value: "manager" }, "\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u044b"),
+                    h("option", { value: "accountant" }, "\u0411\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u044b")
+                ]),
+                Field({ name: "subject", placeholder: "\u0422\u0435\u043c\u0430", required: true, maxLength: 500, className: "wide" }),
+                Textarea({ name: "body", placeholder: "\u0422\u0435\u043a\u0441\u0442", className: "wide", required: true, maxLength: 4000 }),
+                h("button", { className: "react-btn wide", type: "submit" }, "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0440\u0430\u0441\u0441\u044b\u043b\u043a\u0443")
+            ]),
             (props.notifications || []).length
                 ? h("div", { className: "react-stack" }, (props.notifications || []).map(n => h("div", { key: n.id, className: "react-card" }, [h("b", null, n.subject), h("p", null, n.body), h("span", { className: "react-muted" }, dateText(n.created_at))])))
                 : h("div", { className: "react-empty" }, "\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
@@ -2086,55 +2652,116 @@
             ])
         ]);
     }
+    function BackupsPage() {
+        const backups = props.backups || [];
+        return h(React.Fragment, null, [
+            h("div", { className: "react-page-title" }, [
+                h("h1", null, "\u0420\u0435\u0437\u0435\u0440\u0432\u043d\u043e\u0435 \u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435"),
+                PostButton({ action: "/admin/backups/create", children: "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0440\u0435\u0437\u0435\u0440\u0432\u043d\u0443\u044e \u043a\u043e\u043f\u0438\u044e", className: "react-btn" })
+            ]),
+            props.backup_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.backup_success),
+            props.backup_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.backup_error),
+            h("section", { className: "react-panel" }, [
+                h("h2", null, "\u0421\u043e\u0437\u0434\u0430\u043d\u043d\u044b\u0435 ZIP-\u0430\u0440\u0445\u0438\u0432\u044b"),
+                backups.length
+                    ? h("table", { className: "react-table" }, [
+                        h("thead", null, h("tr", null, [
+                            h("th", null, "\u0410\u0440\u0445\u0438\u0432"),
+                            h("th", null, "\u0421\u043e\u0437\u0434\u0430\u043d"),
+                            h("th", null, "\u0420\u0430\u0437\u043c\u0435\u0440")
+                        ])),
+                        h("tbody", null, backups.map(archive => h("tr", { key: archive.name }, [
+                            h("td", null, archive.name),
+                            h("td", null, dateTimeText(archive.created_at)),
+                            h("td", null, formatFileSize(archive.size))
+                        ])))
+                    ])
+                    : h("div", { className: "react-empty" }, "\u0410\u0440\u0445\u0438\u0432\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
+            ])
+        ]);
+    }
     function AdminOrdersTable({ orders, orderStatuses, statusLabels }) {
         const list = orders || [];
         if (!list.length) return h("div", { className: "react-empty react-panel" }, "\u0417\u0430\u043a\u0430\u0437\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.");
         return h("section", { className: "react-panel" }, [
             h("h2", null, "\u0417\u0430\u043a\u0430\u0437\u044b"),
-            h("table", { className: "react-table" }, h("tbody", null, list.map(order => h("tr", { key: order.id }, [
+            h("table", { className: "react-table" }, [
+                h("thead", null, h("tr", null, [
+                    h("th", null, "\u0417\u0430\u043a\u0430\u0437"),
+                    h("th", null, "\u0421\u0443\u043c\u043c\u0430"),
+                    h("th", null, "\u0421\u0442\u0430\u0442\u0443\u0441"),
+                    h("th", null, "\u041e\u043f\u043b\u0430\u0442\u0430"),
+                    h("th", null, "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f")
+                ])),
+                h("tbody", null, list.map(order => h("tr", { key: order.id }, [
                 h("td", null, `#${order.id}`),
                 h("td", null, h(PriceDisplay, { product: { price: order.total_price }, compact: true, inline: true })),
-                h("td", null, statusLabels && statusLabels[order.status] ? statusLabels[order.status] : (order.status || "created")),
-                h("td", null, order.payment_status || "pending"),
+                h("td", null, h(StatusChip, { value: order.status, label: statusLabels && statusLabels[order.status] ? statusLabels[order.status] : (order.status || "created") })),
+                h("td", null, h(StatusChip, { value: order.payment_status, label: paymentStatusText(order.payment_status) })),
                 h("td", null, h("form", { action: `/admin/order/status/${order.id}`, method: "post", className: "react-actions", onSubmit: handleSubmitOnce }, [
                     Select({ name: "status", defaultValue: order.status || "created" }, (orderStatuses || []).map(status => h("option", { key: status, value: status }, statusLabels && statusLabels[status] ? statusLabels[status] : status))),
                     h("button", { className: "react-btn secondary", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
                 ]))
-            ]))))
+            ])))
+            ])
         ]);
     }
     function AdminUsersTable({ users }) {
         const list = users || [];
         return h("section", { className: "react-panel" }, [
             h("h2", null, "\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438"),
-            h("table", { className: "react-table" }, h("tbody", null, list.map(userItem => h("tr", { key: userItem.id }, [
+            h("table", { className: "react-table" }, [
+                h("thead", null, h("tr", null, [
+                    h("th", null, "Email"),
+                    h("th", null, "\u0420\u043e\u043b\u044c"),
+                    h("th", null, "\u0421\u0442\u0430\u0442\u0443\u0441"),
+                    h("th", null, "\u041d\u043e\u0432\u0430\u044f \u0440\u043e\u043b\u044c"),
+                    h("th", null, "\u0410\u043d\u043a\u0435\u0442\u0430")
+                ])),
+                h("tbody", null, list.map(userItem => h("tr", { key: userItem.id }, [
                 h("td", null, userItem.email),
-                h("td", null, userItem.role),
-                h("td", null, userItem.role === "seller" ? sellerApplicationStatusText(userItem.seller_application_status) : (userItem.is_approved ? "\u043e\u0434\u043e\u0431\u0440\u0435\u043d" : "\u043d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438")),
+                h("td", null, h(StatusChip, { value: userItem.role, label: roleText(userItem.role) })),
+                h("td", null, h(StatusChip, { value: userItem.role === "seller" ? userItem.seller_application_status : (userItem.is_approved ? "approved" : "pending"), label: userItem.role === "seller" ? sellerApplicationStatusText(userItem.seller_application_status) : (userItem.is_approved ? "\u043e\u0434\u043e\u0431\u0440\u0435\u043d" : "\u043d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438") })),
                 h("td", null, h("form", { action: `/admin/user/role/${userItem.id}`, method: "post", className: "react-actions", onSubmit: handleSubmitOnce }, [
-                    Select({ name: "role", defaultValue: userItem.role }, ["user", "seller", "admin", "accountant"].map(role => h("option", { key: role, value: role }, role))),
+                    Select({ name: "role", defaultValue: userItem.role }, ["user", "seller", "manager", "admin", "accountant"].map(role => h("option", { key: role, value: role }, roleText(role)))),
                     h("button", { className: "react-btn secondary", type: "submit" }, "\u0420\u043e\u043b\u044c")
                 ])),
                 h("td", null, userItem.role === "seller" && h("form", { action: `/admin/user/approve/${userItem.id}`, method: "post", className: "react-actions", onSubmit: handleSubmitOnce }, [
                     h("input", { type: "hidden", name: "approved", value: userItem.seller_application_status === "approved" ? "0" : "1" }),
                     h("button", { className: `react-btn ${userItem.seller_application_status === "approved" ? "danger" : "secondary"}`, type: "submit" }, userItem.seller_application_status === "approved" ? "\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c" : "\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c")
                 ]))
-            ]))))
+            ])))
+            ])
         ]);
     }
     function AdminProductsTable({ products }) {
         const list = products || [];
         return h("section", { className: "react-panel" }, [
             h("h2", null, "\u0422\u043e\u0432\u0430\u0440\u044b"),
-            h("table", { className: "react-table" }, h("tbody", null, list.map(product => h("tr", { key: product.id }, [
-                h("td", null, A({ href: `/product/${product.id}` }, product.name)),
-                h("td", null, h(PriceDisplay, { product, compact: true, inline: true })),
-                h("td", null, product.category || "-"),
-                h("td", null, product.status || "approved"),
-                h("td", null, h("div", { className: "react-actions" }, [
-                    PostButton({ action: `/admin/product/delete/${product.id}`, children: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c", className: "react-btn danger", confirmMessage: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440?" })
-                ]))
-            ]))))
+            h("table", { className: "react-table" }, [
+                h("thead", null, h("tr", null, [
+                    h("th", null, "\u0422\u043e\u0432\u0430\u0440"),
+                    h("th", null, "\u0426\u0435\u043d\u0430"),
+                    h("th", null, "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f"),
+                    h("th", null, "\u0421\u0442\u0430\u0442\u0443\u0441"),
+                    h("th", null, "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f")
+                ])),
+                h("tbody", null, list.map(product => {
+                const productHref = `/product/${product.id}`;
+                const rowProps = interactiveRowProps(productHref);
+                rowProps.key = product.id;
+                return h("tr", rowProps, [
+                    h("td", null, A({ href: productHref }, product.name)),
+                    h("td", null, h(PriceDisplay, { product, compact: true, inline: true })),
+                    h("td", null, product.category || "-"),
+                    h("td", null, h(StatusChip, { value: product.status, label: productStatusText(product.status) })),
+                    h("td", null, h("div", { className: "react-actions" }, [
+                        ButtonLink({ href: productHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c"),
+                        PostButton({ action: `/admin/product/delete/${product.id}`, children: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c", className: "react-btn danger", confirmMessage: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440?" })
+                    ]))
+                ]);
+            }))
+            ])
         ]);
     }
     function AdminManagePage() {
@@ -2147,7 +2774,8 @@
         ];
         return h(React.Fragment, null, [
             h("div", { className: "react-page-title" }, [h("h1", null, "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435")]),
-            props.admin_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.admin_error),
+            props.admin_success && h("div", { className: "alert alert-success" }, props.admin_success),
+            props.admin_error && h("div", { className: "alert alert-danger" }, props.admin_error),
             h("div", { className: "react-tab-row" }, tabs.map(item => h("button", {
                 key: item.id,
                 type: "button",
@@ -2177,47 +2805,72 @@
             tab === "products" && h(React.Fragment, null, [
                 h("section", { className: "react-panel" }, [
                     h("h2", null, "\u0422\u043e\u0432\u0430\u0440\u044b \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435"),
-                    pendingProducts.length ? h("table", { className: "react-table" }, h("tbody", null, pendingProducts.map(product => h("tr", { key: product.id }, [
-                        h("td", null, A({ href: `/product/${product.id}` }, product.name)),
-                        h("td", null, ownerName(product)),
-                        h("td", null, h("div", { className: "react-actions" }, [
-                            PostButton({ action: `/admin/product/approve/${product.id}`, children: "\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c" }),
-                            h("form", { action: `/admin/product/reject/${product.id}`, method: "post", className: "react-inline-form", onSubmit: handleSubmitOnce }, [
-                                h("input", { type: "hidden", name: "reason", value: "\u041d\u0435 \u0441\u043e\u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u043f\u0440\u0430\u0432\u0438\u043b\u0430\u043c \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b" }),
-                                h("button", { className: "react-btn danger", type: "submit" }, "\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c")
-                            ])
-                        ]))
-                    ])))) : h("div", { className: "react-empty" }, "\u041d\u0435\u0442 \u0442\u043e\u0432\u0430\u0440\u043e\u0432 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435.")
+                    pendingProducts.length ? h("table", { className: "react-table" }, [
+                        h("thead", null, h("tr", null, [
+                            h("th", null, "\u0422\u043e\u0432\u0430\u0440"),
+                            h("th", null, "\u0424\u0435\u0440\u043c\u0435\u0440"),
+                            h("th", null, "\u0421\u0442\u0430\u0442\u0443\u0441"),
+                            h("th", null, "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f")
+                        ])),
+                        h("tbody", null, pendingProducts.map(product => {
+                        const productHref = `/product/${product.id}`;
+                        const rowProps = interactiveRowProps(productHref);
+                        rowProps.key = product.id;
+                        return h("tr", rowProps, [
+                            h("td", null, A({ href: productHref }, product.name)),
+                            h("td", null, ownerName(product)),
+                            h("td", null, h(StatusChip, { value: product.status, label: productStatusText(product.status) })),
+                            h("td", null, h("div", { className: "react-actions" }, [
+                                ButtonLink({ href: productHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c"),
+                                PostButton({ action: `/admin/product/approve/${product.id}`, children: "\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c" }),
+                                h("form", { action: `/admin/product/reject/${product.id}`, method: "post", className: "react-inline-form", onSubmit: handleSubmitOnce }, [
+                                    h("input", { type: "hidden", name: "reason", value: "\u041d\u0435 \u0441\u043e\u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u043f\u0440\u0430\u0432\u0438\u043b\u0430\u043c \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b" }),
+                                    h("button", { className: "react-btn danger", type: "submit" }, "\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c")
+                                ])
+                            ]))
+                        ]);
+                    }))
+                    ]) : h("div", { className: "react-empty" }, "\u041d\u0435\u0442 \u0442\u043e\u0432\u0430\u0440\u043e\u0432 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435.")
                 ]),
                 h(AdminProductsTable, { products: props.products || [] })
             ]),
             tab === "sellers" && h("section", { className: "react-panel" }, [
                 h("h2", null, "\u0417\u0430\u044f\u0432\u043a\u0438 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432"),
-                farmerApplications.length ? h("div", { className: "react-stack" }, farmerApplications.map(seller => h("article", { key: seller.id, className: "react-card react-seller-application-card" }, [
-                    h("div", { className: "react-seller-application-grid" }, [
-                        h("div", { key: "info", className: "react-stack" }, [
-                            h("div", { className: "react-chip-row" }, [
-                                h("span", { className: "react-chip" }, sellerApplicationStatusText(seller.seller_application_status)),
-                                h("span", { className: "react-chip" }, `ID ${seller.id}`)
+                farmerApplications.length ? h("div", { className: "react-farmer-app-list" }, farmerApplications.map(seller => h("article", { key: seller.id, className: "react-farmer-app-card" }, [
+                    h("header", { className: "react-farmer-app-head" }, [
+                        h("div", { className: "react-farmer-app-title" }, [
+                            h("h3", null, seller.farm_name || "\u0425\u043e\u0437\u044f\u0439\u0441\u0442\u0432\u043e \u0431\u0435\u0437 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044f"),
+                            h("span", { className: "react-muted" }, seller.full_name || "\u041f\u0440\u0435\u0434\u0441\u0442\u0430\u0432\u0438\u0442\u0435\u043b\u044c \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d")
+                        ]),
+                        h("div", { className: "react-chip-row" }, [
+                            h("span", { className: "react-chip" }, sellerApplicationStatusText(seller.seller_application_status)),
+                            h("span", { className: "react-chip" }, `ID ${seller.id}`)
+                        ])
+                    ]),
+                    h("div", { className: "react-farmer-app-body" }, [
+                        h("div", { className: "react-farmer-app-main" }, [
+                            h("div", { className: "react-farmer-app-fields" }, [
+                                h("div", { className: "react-farmer-app-field" }, [h("b", null, "Email"), h("span", null, seller.email || "-")]),
+                                h("div", { className: "react-farmer-app-field" }, [h("b", null, "\u0422\u0435\u043b\u0435\u0444\u043e\u043d"), h("span", null, seller.phone || "-")]),
+                                h("div", { className: "react-farmer-app-field" }, [h("b", null, "\u0420\u0435\u0433\u0438\u043e\u043d"), h("span", null, seller.farm_address || "-")]),
+                                h("div", { className: "react-farmer-app-field react-farmer-app-field-wide" }, [h("b", null, "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438"), h("span", null, seller.product_categories || "-")])
                             ]),
-                            h("div", { className: "react-info-grid" }, [
-                                h("div", { className: "react-card" }, [h("b", null, "\u0424\u0418\u041e"), h("div", null, seller.full_name || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "Email"), h("div", null, seller.email || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0445\u043e\u0437\u044f\u0439\u0441\u0442\u0432\u0430"), h("div", null, seller.farm_name || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "\u0422\u0435\u043b\u0435\u0444\u043e\u043d"), h("div", null, seller.phone || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "\u0420\u0435\u0433\u0438\u043e\u043d"), h("div", null, seller.farm_address || "-")]),
-                                h("div", { className: "react-card" }, [h("b", null, "\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438"), h("div", null, seller.product_categories || "-")])
-                            ]),
-                            h("div", { className: "react-card" }, [
+                            h("div", { className: "react-farmer-app-description" }, [
                                 h("b", null, "\u041a\u0440\u0430\u0442\u043a\u043e\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435"),
-                                h("p", { className: "react-muted" }, seller.farm_description || "\u041d\u0435\u0442 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f")
+                                h("p", null, seller.farm_description || "\u041d\u0435\u0442 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u044f")
                             ]),
-                            seller.seller_application_rejection_reason ? h("div", { className: "alert alert-danger" }, seller.seller_application_rejection_reason) : null,
-                            h("form", { action: `/admin/farmer-application/${seller.id}/status`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
-                                h("select", { name: "status", className: "react-input", defaultValue: seller.seller_application_status || "new" }, farmerStatusOptions.map(status => h("option", { key: status, value: status }, sellerApplicationStatusText(status)))),
-                                Textarea({ name: "comment", placeholder: "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u0430\u0434\u043c\u0438\u043d\u0430", defaultValue: seller.seller_application_admin_comment || seller.seller_application_rejection_reason || "", className: "wide", rows: 3, maxLength: 2000 }),
-                                h("button", { className: "react-btn wide", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u0443\u0441")
-                            ])
+                            seller.seller_application_rejection_reason ? h("div", { className: "alert alert-danger" }, seller.seller_application_rejection_reason) : null
+                        ]),
+                        h("form", { action: `/admin/farmer-application/${seller.id}/status`, method: "post", className: "react-farmer-app-form", onSubmit: handleSubmitOnce }, [
+                            h("label", null, [
+                                h("span", null, "\u0421\u0442\u0430\u0442\u0443\u0441"),
+                                h("select", { name: "status", className: "react-input", defaultValue: seller.seller_application_status || "new" }, farmerStatusOptions.map(status => h("option", { key: status, value: status }, sellerApplicationStatusText(status))))
+                            ]),
+                            h("label", null, [
+                                h("span", null, "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439"),
+                                Textarea({ name: "comment", placeholder: "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u0430\u0434\u043c\u0438\u043d\u0430", defaultValue: seller.seller_application_admin_comment || seller.seller_application_rejection_reason || "", rows: 3, maxLength: 2000 })
+                            ]),
+                            h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
                         ])
                     ])
                 ]))) : h("div", { className: "react-empty" }, "\u0417\u0430\u044f\u0432\u043e\u043a \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
@@ -2270,7 +2923,7 @@
                     h("td", null, `#${complaint.id}`),
                     h("td", null, complaint.order_id ? `#${complaint.order_id}` : "-"),
                     h("td", null, complaint.author ? (complaint.author.full_name || complaint.author.email) : "-"),
-                    h("td", null, complaint.status || "-"),
+                    h("td", null, h(StatusChip, { value: complaint.status, label: complaintStatusText(complaint.status) })),
                     h("td", null, h("div", { className: "react-actions" }, [
                         ButtonLink({ href: `/accounting/requests/${complaint.id}`, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c")
                     ]))
@@ -2283,7 +2936,7 @@
                     h("td", null, order.user ? order.user.email : "-"),
                     h("td", null, money(order.total_price)),
                     h("td", null, money(order.platform_fee)),
-                    h("td", null, order.payout_status || "pending"),
+                    h("td", null, h(StatusChip, { value: order.payout_status || "pending", label: payoutStatusText(order.payout_status || "pending") })),
                     h("td", null, h("div", { className: "react-actions" }, [
                         ButtonLink({ href: `/accounting/orders/${order.id}`, className: "secondary" }, "\u0414\u0435\u0442\u0430\u043b\u0438"),
                         (order.payout_status || "pending") !== "transferred_to_partner" && PostButton({ action: `/accounting/orders/${order.id}/payout`, children: "\u041f\u0435\u0440\u0435\u0434\u0430\u043d\u043e \u043f\u0430\u0440\u0442\u043d\u0435\u0440\u0443" }),
@@ -2319,9 +2972,9 @@
             ]),
             h("div", { className: "react-info-grid" }, [
                 h("div", { className: "react-card" }, [h("b", null, "\u041a\u043b\u0438\u0435\u043d\u0442"), h("div", null, order.user ? (order.user.full_name || order.user.email || "-") : "-")]),
-                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h("div", null, order.status || "-")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h("div", null, orderStatusText(order, props.status_labels))]),
                 h("div", { className: "react-card" }, [h("b", null, "\u041e\u043f\u043b\u0430\u0442\u0430"), h("div", null, paymentStatusText(order.payment_status))]),
-                h("div", { className: "react-card" }, [h("b", null, "\u0412\u044b\u043f\u043b\u0430\u0442\u0430"), h("div", null, order.payout_status || "pending")])
+                h("div", { className: "react-card" }, [h("b", null, "\u0412\u044b\u043f\u043b\u0430\u0442\u0430"), h("div", null, payoutStatusText(order.payout_status || "pending"))])
             ]),
             h("section", { className: "react-panel" }, [
                 h("h2", null, "\u0421РѕСЃС‚Р°РІ Р·Р°РєР°Р·Р°"),
@@ -2361,26 +3014,50 @@
     }
     function ComplaintsPage() {
         const list = props.complaints || [];
-        return h("section", { className: "react-panel" }, [
-            h("h1", null, page === "complaints_admin" ? "\u0416\u0430\u043b\u043e\u0431\u044b" : "\u041c\u043e\u0438 \u0436\u0430\u043b\u043e\u0431\u044b"),
-            props.complaint_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.complaint_success),
-            props.complaint_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.complaint_error),
-            list.length ? h("div", { className: "react-stack" }, list.map(item => {
+        const isAdminView = page === "complaints_admin";
+        return h("section", { className: "react-panel react-complaints-shell" }, [
+            h("div", { className: "react-page-title" }, [
+                h("div", null, [
+                    h("h1", null, isAdminView ? "\u0416\u0430\u043b\u043e\u0431\u044b" : "\u041c\u043e\u0438 \u0436\u0430\u043b\u043e\u0431\u044b"),
+                    h("p", { className: "react-muted" }, isAdminView ? "\u041e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u044f \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u0435\u0439, \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432 \u0438 \u0437\u0430\u043a\u0430\u0437\u043e\u0432" : "\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0432\u0430\u0448\u0438\u0445 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u0439")
+                ])
+            ]),
+            props.complaint_success && h("div", { className: "react-alert alert-success" }, props.complaint_success),
+            props.complaint_error && h("div", { className: "react-alert alert-danger" }, props.complaint_error),
+            list.length ? h("div", { className: "react-complaint-list" }, list.map(item => {
                 const c = item.complaint || item;
-                return h("div", { key: c.id, className: "react-card" }, [
-                    h("b", null, `${COMPLAINT_CATEGORY_LABELS[c.category] || c.category || c.type} \u00b7 ${c.status}`),
-                    h("p", null, c.text),
+                const detailHref = isAdminView ? `/complaints/admin/${c.id}` : `/complaints/my/${c.id}`;
+                const rowProps = interactiveRowProps(detailHref);
+                const author = item.author;
+                const targetUser = item.target_user;
+                const targetProduct = item.target_product;
+                rowProps.key = c.id;
+                rowProps.className = `${rowProps.className} react-card react-complaint-card`;
+                return h("article", rowProps, [
+                    h("div", { className: "react-complaint-card-head" }, [
+                        h("div", null, [
+                            h("b", null, COMPLAINT_CATEGORY_LABELS[c.category] || c.category || c.type || "\u0416\u0430\u043b\u043e\u0431\u0430"),
+                            h("p", { className: "react-muted" }, `#${c.id} \u00b7 ${dateText(c.created_at) || "\u0434\u0430\u0442\u0430 \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u0430"}`)
+                        ]),
+                        h(StatusChip, { value: c.status, label: complaintStatusText(c.status) })
+                    ]),
+                    h("p", { className: "react-complaint-text" }, c.text || "\u0411\u0435\u0437 \u0442\u0435\u043a\u0441\u0442\u0430"),
+                    h("div", { className: "react-complaint-meta" }, [
+                        isAdminView && h("span", null, ["\u0410\u0432\u0442\u043e\u0440: ", h("b", null, author ? (author.full_name || author.email || `#${author.id}`) : "\u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d")]),
+                        targetUser && h("span", null, ["\u0424\u0435\u0440\u043c\u0435\u0440: ", h("b", null, targetUser.farm_name || targetUser.full_name || targetUser.email || `#${targetUser.id}`)]),
+                        targetProduct && h("span", null, ["\u0422\u043e\u0432\u0430\u0440: ", h("b", null, targetProduct.name || `#${targetProduct.id}`)]),
+                        c.order_id && h("span", null, ["\u0417\u0430\u043a\u0430\u0437: ", h("b", null, `#${c.order_id}`)])
+                    ].filter(Boolean)),
                     c.attachment_path && ButtonLink({ href: c.attachment_path, className: "secondary" }, "\u0412\u043b\u043e\u0436\u0435\u043d\u0438\u0435"),
                     c.admin_response && h("div", { className: "react-note" }, [
                         h("b", null, "\u041e\u0442\u0432\u0435\u0442 \u0430\u0434\u043c\u0438\u043d\u0430"),
                         h("p", null, c.admin_response)
                     ]),
-                    h("p", { className: "react-muted" }, `#${c.id} \u00b7 ${dateText(c.created_at)}`),
                     h("div", { className: "react-actions" }, [
-                        page === "complaints_admin" ? ButtonLink({ href: `/complaints/admin/${c.id}`, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c") : ButtonLink({ href: `/complaints/my/${c.id}`, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c")
+                        ButtonLink({ href: detailHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c")
                     ]),
-                    page === "complaints_admin" && h("form", { action: `/complaints/status/${c.id}`, method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
-                        Select({ name: "status", defaultValue: c.status }, ["new", "in_progress", "waiting_farmer", "sent_to_accountant", "processing", "resolved", "rejected", "closed"].map(s => h("option", { value: s }, s))),
+                    isAdminView && h("form", { action: `/complaints/status/${c.id}`, method: "post", className: "react-complaint-status-form", onSubmit: handleSubmitOnce }, [
+                        Select({ name: "status", defaultValue: c.status }, COMPLAINT_STATUS_OPTIONS.map(s => h("option", { value: s }, complaintStatusText(s)))),
                         Textarea({ name: "response_text", placeholder: "\u041e\u0442\u0432\u0435\u0442 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u0430", defaultValue: c.admin_response || "", className: "wide", rows: 4, maxLength: 2000 }),
                         h("div", { className: "react-actions" }, [
                             h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"),
@@ -2434,7 +3111,7 @@
                     h("button", { className: "react-btn wide", type: "submit" }, "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0436\u0430\u043b\u043e\u0431\u0443")
                 ]),
                 complaints.length ? h("div", { className: "react-stack" }, complaints.map(c => h("div", { key: c.id, className: "react-card" }, [
-                    h("b", null, `${c.type} \u00b7 ${c.status}`),
+                    h("b", null, `${COMPLAINT_CATEGORY_LABELS[c.category] || c.type || "\u0416\u0430\u043b\u043e\u0431\u0430"} \u00b7 ${complaintStatusText(c.status)}`),
                     h("p", null, c.text)
                 ]))) : null
             ])
@@ -2537,6 +3214,7 @@
                 }[conv.type] || conv.type || "\u0414\u0438\u0430\u043b\u043e\u0433";
                 return h("div", { key: conv.id, className: "react-card" }, [
                     h("b", null, `${label} #${conv.id}`),
+                    h(StatusChip, { value: conv.status || "open", label: conversationStatusText(conv.status || "open") }),
                     h("p", null, item.order_number ? `\u0417\u0430\u043a\u0430\u0437 ${item.order_number}` : item.product_name ? item.product_name : item.complaint_id ? `\u041e\u0431\u0440. #${item.complaint_id}` : ""),
                     h("p", { className: "react-muted" }, item.last_message ? item.last_message.text : "\u0411\u0435\u0437 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439"),
                     h("div", { className: "react-actions" }, [ButtonLink({ href: `/conversations/${conv.id}`, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c")])
@@ -2562,14 +3240,14 @@
             ]),
             h("div", { className: "react-info-grid" }, [
                 h("div", { className: "react-card" }, [h("b", null, "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438"), h("p", null, [conversation.buyer ? (conversation.buyer.full_name || conversation.buyer.email) : "-", " / ", conversation.farmer ? (conversation.farmer.farm_name || conversation.farmer.full_name || conversation.farmer.email) : "-"])]),
-                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h("p", null, conversation.status || "-")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h(StatusChip, { value: conversation.status || "open", label: conversationStatusText(conversation.status || "open") })]),
                 conversation.product && h("div", { className: "react-card" }, [h("b", null, "\u0422\u043e\u0432\u0430\u0440"), h("p", null, conversation.product.name)]),
                 conversation.complaint && h("div", { className: "react-card" }, [h("b", null, "\u041e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u0435"), h("p", null, COMPLAINT_CATEGORY_LABELS[conversation.complaint.category] || conversation.complaint.category || "-")])
             ]),
             h("section", { className: "react-panel react-stack" }, [
                 h("h2", null, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f"),
                 messages.length ? h("div", { className: "react-chat-list" }, messages.map(message => h("div", { key: message.id, className: `react-chat-message${message.sender_id === (user && user.id) ? " own" : ""}` }, [
-                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a"} \u00b7 ${message.sender_role || ""}`),
+                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a"} \u00b7 ${roleText(message.sender_role)}`),
                     h("p", null, message.text),
                     h("span", { className: "react-muted" }, dateText(message.created_at))
                 ]))) : h("div", { className: "react-empty" }, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442."),
@@ -2586,25 +3264,34 @@
         const order = props.order || {};
         const conversation = props.conversation || {};
         const messages = props.messages || [];
+        const author = props.author || {};
+        const targetUser = props.target_user || {};
+        const targetProduct = props.target_product || {};
+        const canAdmin = user && (user.role === "admin" || user.role === "manager");
         const recipientLabel = complaint.assigned_to_role === "accountant" ? "бухгалтерия" : "поддержка";
-        return h("section", { className: "react-panel react-stack" }, [
+        return h("section", { className: "react-complaint-detail react-stack" }, [
             h("div", { className: "react-page-title" }, [
                 h("div", null, [
                     h("h1", null, `\u0416\u0430\u043b\u043e\u0431\u0430 #${complaint.id || ""}`),
                     h("p", { className: "react-muted" }, COMPLAINT_CATEGORY_LABELS[complaint.category] || complaint.category || complaint.type || "-")
                 ]),
-                user && user.role === "admin"
+                canAdmin
                     ? ButtonLink({ href: "/complaints/admin", className: "secondary" }, "\u041a \u0441\u043f\u0438\u0441\u043a\u0443")
                     : ButtonLink({ href: "/complaints/my", className: "secondary" }, "\u041a \u043c\u043e\u0438\u043c \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u044f\u043c")
             ]),
-            h("div", { className: "react-info-grid" }, [
-                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h("p", null, complaint.status || "-")]),
+            h("div", { className: "react-complaint-summary" }, [
+                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h(StatusChip, { value: complaint.status, label: complaintStatusText(complaint.status) })]),
                 h("div", { className: "react-card" }, [h("b", null, "\u0410\u0434\u0440\u0435\u0441\u0430\u0442"), h("p", null, recipientLabel)]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0410\u0432\u0442\u043e\u0440"), h("p", null, author.full_name || author.email || (complaint.user_id ? `#${complaint.user_id}` : "-"))]),
                 complaint.order_id && h("div", { className: "react-card" }, [h("b", null, "\u0417\u0430\u043a\u0430\u0437"), h("p", null, orderDisplayNumber(order) || `#${complaint.order_id}`)]),
-                complaint.target_user_id && h("div", { className: "react-card" }, [h("b", null, "\u0424\u0435\u0440\u043c\u0435\u0440"), h("p", null, `${complaint.target_user_id}`)])
+                complaint.target_user_id && h("div", { className: "react-card" }, [h("b", null, "\u0424\u0435\u0440\u043c\u0435\u0440"), h("p", null, targetUser.farm_name || targetUser.full_name || targetUser.email || `#${complaint.target_user_id}`)]),
+                complaint.target_product_id && h("div", { className: "react-card" }, [h("b", null, "\u0422\u043e\u0432\u0430\u0440"), h("p", null, targetProduct.name || `#${complaint.target_product_id}`)])
+            ].filter(Boolean)),
+            h("div", { className: "react-panel react-complaint-message" }, [
+                h("b", null, "\u0422\u0435\u043a\u0441\u0442 \u0436\u0430\u043b\u043e\u0431\u044b"),
+                h("p", null, complaint.text || complaint.description || "")
             ]),
-            h("div", { className: "react-panel" }, h("p", null, complaint.text || complaint.description || "")),
-            complaint.attachment_path && h("div", { className: "react-panel" }, [
+            complaint.attachment_path && h("div", { className: "react-panel react-complaint-attachment" }, [
                 h("b", null, "\u0412\u043b\u043e\u0436\u0435\u043d\u0438\u0435"),
                 A({ href: complaint.attachment_path, target: "_blank" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0444\u0430\u0439\u043b")
             ]),
@@ -2612,7 +3299,7 @@
             h("section", { className: "react-panel react-stack" }, [
                 h("h2", null, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f"),
                 messages.length ? h("div", { className: "react-chat-list" }, messages.map(message => h("div", { key: message.id, className: "react-chat-message" }, [
-                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a"} \u00b7 ${message.sender_role || ""}`),
+                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a"} \u00b7 ${roleText(message.sender_role)}`),
                     h("p", null, message.text),
                     h("span", { className: "react-muted" }, dateText(message.created_at))
                 ]))) : h("div", { className: "react-empty" }, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442."),
@@ -2623,7 +3310,7 @@
                     ]),
                     props.can_transfer && PostButton({ action: `/complaints/admin/${complaint.id}/transfer`, children: "\u041f\u0435\u0440\u0435\u0434\u0430\u0442\u044c \u0431\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0443", className: "react-btn secondary" }),
                     props.can_status && h("form", { action: `/complaints/status/${complaint.id}`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
-                        Select({ name: "status", defaultValue: complaint.status }, ["new", "processing", "in_progress", "waiting_farmer", "sent_to_accountant", "resolved", "rejected", "closed"].map(status => h("option", { value: status }, status))),
+                        Select({ name: "status", defaultValue: complaint.status }, COMPLAINT_STATUS_OPTIONS.map(status => h("option", { value: status }, complaintStatusText(status)))),
                         Textarea({ name: "response_text", placeholder: "\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439", className: "wide", rows: 3, defaultValue: complaint.admin_response || "" }),
                         h("button", { className: "react-btn wide", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
                     ])
@@ -2638,7 +3325,7 @@
                 h("h1", null, "\u041f\u043e\u0434\u0434\u0435\u0440\u0436\u043a\u0430"),
                 ButtonLink({ href: "/seller/", className: "secondary" }, "\u041a \u043a\u0430\u0431\u0438\u043d\u0435\u0442\u0443")
             ]),
-            h("form", { action: "/seller/support/create", method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+            h("form", { action: "/seller/support/create", method: "post", encType: "multipart/form-data", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
                 Select({ name: "topic", defaultValue: "other" }, [
                     h("option", { value: "moderation" }, "\u041c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u044f \u043f\u0440\u043e\u0444\u0438\u043b\u044f/\u0442\u043e\u0432\u0430\u0440\u0430"),
                     h("option", { value: "documents" }, "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430"),
@@ -2648,6 +3335,7 @@
                     h("option", { value: "other" }, "\u0414\u0440\u0443\u0433\u043e\u0435")
                 ]),
                 Textarea({ name: "text", placeholder: "\u041e\u043f\u0438\u0448\u0438\u0442\u0435 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u0435", className: "wide", rows: 4, required: true, minLength: 10, maxLength: 2000 }),
+                h("input", { name: "attachment", type: "file", className: "react-input wide", accept: "image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" }),
                 h("button", { className: "react-btn wide", type: "submit" }, "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u0435")
             ]),
             tickets.length ? h("div", { className: "react-stack" }, tickets.map(item => {
@@ -2658,6 +3346,7 @@
                     h("p", null, COMPLAINT_CATEGORY_LABELS[ticket.category] || ticket.category || ticket.type),
                     h("p", null, ticket.text),
                 h("div", { className: "react-actions" }, [
+                        ticket.attachment_path && ButtonLink({ href: ticket.attachment_path, className: "secondary" }, "\u0412\u043b\u043e\u0436\u0435\u043d\u0438\u0435"),
                         ButtonLink({ href: conversationHref, className: "secondary" }, item.conversation_id ? "\u041e\u0442\u043a\u0440\u044b\u0442\u044c" : "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c")
                 ])
                 ]);
@@ -2679,7 +3368,7 @@
                 ButtonLink({ href: "/accounting/", className: "secondary" }, "\u041a \u0431\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0438\u0438")
             ]),
             h("div", { className: "react-info-grid" }, [
-                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h("p", null, complaint.status || "-")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h(StatusChip, { value: complaint.status, label: complaintStatusText(complaint.status) })]),
                 h("div", { className: "react-card" }, [h("b", null, "\u0417\u0430\u043a\u0430\u0437"), h("p", null, orderDisplayNumber(order) || complaint.order_id || "-")]),
                 h("div", { className: "react-card" }, [h("b", null, "\u0421\u0443\u043c\u043c\u0430"), h("p", null, money(order.total_price || 0))]),
                 h("div", { className: "react-card" }, [h("b", null, "\u041a\u043e\u043c\u0438\u0441\u0441\u0438\u044f"), h("p", null, money(order.platform_fee || 0))])
@@ -2687,7 +3376,7 @@
             h("section", { className: "react-panel react-stack" }, [
                 h("h2", null, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f"),
                 messages.length ? h("div", { className: "react-chat-list" }, messages.map(message => h("div", { key: message.id, className: "react-chat-message" }, [
-                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a"} \u00b7 ${message.sender_role || ""}`),
+                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a"} \u00b7 ${roleText(message.sender_role)}`),
                     h("p", null, message.text),
                     h("span", { className: "react-muted" }, dateText(message.created_at))
                 ]))) : h("div", { className: "react-empty" }, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442."),
@@ -2760,21 +3449,23 @@
     function GenericPage() {
         return h("section", { className: "react-panel" }, [h("h1", null, "\u0420\u0430\u0437\u0434\u0435\u043b"), h("p", null, "\u0418\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 \u043e\u0431\u0449\u0438\u0439 React-\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442."), h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: 320, overflow: "auto" } }, JSON.stringify(props, null, 2))]);
     }
+    function NullPage() {
+        return null;
+    }
     const pageMap = {
         index: HomePage,
         catalog: CatalogPage,
         search: CatalogPage,
         favorites: CatalogPage,
         product: ProductPage,
-        login: LoginPage,
-        forgot_password: ForgotPasswordPage,
-        forgot_password_sent: ForgotPasswordSentPage,
-        reset_password: ResetPasswordPage,
-        register: RegisterPage,
-        become_seller: BecomeSellerPage,
+        login: NullPage,
+        forgot_password: NullPage,
+        forgot_password_sent: NullPage,
+        reset_password: NullPage,
+        register: NullPage,
+        become_seller: NullPage,
         cart: CartPage,
         seller: SellerPage,
-        seller_settings: SellerPage,
         seller_settings: SellerPage,
         seller_orders: SellerOrdersPage,
         seller_product_edit: SellerEditPage,
@@ -2793,6 +3484,7 @@
         notifications: NotificationsPage,
         notifications_admin: NotificationsPage,
         communications_admin: AdminHomePage,
+        backups: BackupsPage,
         admin: AdminManagePage,
         manager: ModerationPage,
         analytics: AnalyticsPage,
@@ -2848,21 +3540,39 @@
     function App() {
         const Page = pageMap[page] || GenericPage;
         const [logoutConfirm, setLogoutConfirm] = React.useState(null);
-        const [sellerSignupOpen, setSellerSignupOpen] = React.useState(page === "become_seller");
+        const [authView, setAuthView] = React.useState(authRouteSet.has(page) ? page : null);
         const [noticeMessage, setNoticeMessage] = React.useState(props.notice_message || "");
         const onLogoutRequest = React.useCallback(event => {
             if (event) event.preventDefault();
             setLogoutConfirm({ href: "/logout" });
         }, []);
+        const onLoginRequest = React.useCallback(event => {
+            if (event) event.preventDefault();
+            setAuthView("login");
+        }, []);
         const onBecomeSellerRequest = React.useCallback(event => {
             if (event) event.preventDefault();
-            setSellerSignupOpen(true);
+            setAuthView("become_seller");
+        }, []);
+        React.useEffect(() => {
+            const openInlineAuth = event => {
+                setAuthView((event && event.detail && event.detail.view) || "login");
+            };
+            window.addEventListener("react:auth-required", openInlineAuth);
+            return () => window.removeEventListener("react:auth-required", openInlineAuth);
         }, []);
         const closeLogoutConfirm = React.useCallback(() => {
             setLogoutConfirm(null);
         }, []);
-        const closeSellerSignup = React.useCallback(() => {
-            setSellerSignupOpen(false);
+        const closeAuth = React.useCallback(() => {
+            if (authRouteSet.has(page)) {
+                window.location.assign("/");
+                return;
+            }
+            setAuthView(null);
+        }, []);
+        const switchAuth = React.useCallback(view => {
+            setAuthView(view);
         }, []);
         const closeNotice = React.useCallback(() => {
             setNoticeMessage("");
@@ -2875,11 +3585,13 @@
         return h(Shell, {
             onLogoutRequest,
             onBecomeSellerRequest,
+            onLoginRequest,
             logoutConfirm,
             closeLogoutConfirm,
             confirmLogout,
-            sellerSignupOpen,
-            closeSellerSignup,
+            authView,
+            closeAuth,
+            switchAuth,
             noticeMessage,
             closeNotice
         }, h(Page, { onBecomeSellerRequest }));

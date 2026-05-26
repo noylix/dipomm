@@ -13,7 +13,7 @@ from logistics import ensure_logistics_shipment, mark_shipment_in_transit
 from marketplace_utils import effective_product_price, product_price_payload, product_stock_quantity
 from models import Complaint, Conversation, FarmCertificate, Message, Notification, Order, OrderItem, Product, Review, SellerReview, User
 from order_statuses import ORDER_STATUS_LABELS, normalize_order_status
-from routes.conversations import upsert_support_conversation
+from routes.conversations import _save_attachment, upsert_support_conversation
 
 UPLOAD_DIR = os.path.join("static", "uploads", "products")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -203,34 +203,7 @@ def _seller_is_approved(user: User | None) -> bool:
     return bool(user and user.role == "seller" and user.seller_application_status == "approved")
 
 
-@router.get("/pending")
-def seller_pending(request: Request, db: Session = Depends(get_db)):
-    user = get_optional_user(request, db)
-    if not user or user.role != "seller":
-        return RedirectResponse("/", status_code=303)
-    if _seller_is_approved(user):
-        return RedirectResponse("/seller/", status_code=303)
-    return request.app.state.templates.TemplateResponse(
-        request,
-        "seller_pending",
-        {
-            "user": user,
-            "application_status": user.seller_application_status or "pending",
-            "application_rejection_reason": user.seller_application_rejection_reason,
-            "notice_message": request.session.pop("seller_pending_notice", None),
-        },
-    )
-
-
-@router.get("/")
-def seller_panel(request: Request, db: Session = Depends(get_db)):
-    user = get_optional_user(request, db)
-    guard = check_role(user, ["seller"])
-    if guard:
-        return guard
-    if user.role == "seller" and not _seller_is_approved(user):
-        return RedirectResponse("/seller/pending", status_code=303)
-
+def _seller_dashboard_context(user: User, db: Session, request: Request, initial_tab: str = "overview") -> dict[str, object]:
     if user.role == "admin":
         products = db.query(Product).all()
         financials = None
@@ -269,21 +242,52 @@ def seller_panel(request: Request, db: Session = Depends(get_db)):
         }
         for ticket in support_requests
     ]
+    return {
+        "seller": user,
+        "products": products,
+        "user": user,
+        "financials": financials,
+        "certificates": certificates,
+        "conversations": conversations,
+        "support_requests": support_items,
+        "initial_tab": initial_tab,
+        "seller_error": request.session.pop("seller_error", None),
+        "seller_success": request.session.pop("seller_success", None),
+    }
+
+
+@router.get("/pending")
+def seller_pending(request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    if not user or user.role != "seller":
+        return RedirectResponse("/", status_code=303)
+    if _seller_is_approved(user):
+        return RedirectResponse("/seller/", status_code=303)
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "seller_pending",
+        {
+            "user": user,
+            "application_status": user.seller_application_status or "pending",
+            "application_rejection_reason": user.seller_application_rejection_reason,
+            "notice_message": request.session.pop("seller_pending_notice", None),
+        },
+    )
+
+
+@router.get("/")
+def seller_panel(request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    guard = check_role(user, ["seller"])
+    if guard:
+        return guard
+    if user.role == "seller" and not _seller_is_approved(user):
+        return RedirectResponse("/seller/pending", status_code=303)
 
     return request.app.state.templates.TemplateResponse(
         request,
         "seller",
-        {
-            "seller": user,
-            "products": products,
-            "user": user,
-            "financials": financials,
-            "certificates": certificates,
-            "conversations": conversations,
-            "support_requests": support_items,
-            "seller_error": request.session.pop("seller_error", None),
-            "seller_success": request.session.pop("seller_success", None),
-        },
+        _seller_dashboard_context(user, db, request),
     )
 
 
@@ -332,6 +336,7 @@ def seller_support_create(
     request: Request,
     topic: str = Form("other"),
     text: str = Form(""),
+    attachment: UploadFile = File(None),
     db: Session = Depends(get_db),
 ):
     user = get_optional_user(request, db)
@@ -352,6 +357,7 @@ def seller_support_create(
         category=topic,
         type=topic,
         text=text[:2000],
+        attachment_path=_save_attachment(attachment),
         status="new",
         assigned_to_role="admin",
     )
@@ -372,22 +378,10 @@ def seller_settings_page(request: Request, db: Session = Depends(get_db)):
     if user.role == "seller" and not _seller_is_approved(user):
         return RedirectResponse("/seller/pending", status_code=303)
 
-    certificates = (
-        db.query(FarmCertificate)
-        .filter(FarmCertificate.seller_id == user.id)
-        .order_by(FarmCertificate.id.desc())
-        .all()
-    )
     return request.app.state.templates.TemplateResponse(
         request,
-        "seller_settings",
-        {
-            "seller": user,
-            "user": user,
-            "certificates": certificates,
-            "seller_error": request.session.pop("seller_error", None),
-            "seller_success": request.session.pop("seller_success", None),
-        },
+        "seller",
+        _seller_dashboard_context(user, db, request, initial_tab="profile"),
     )
 
 
@@ -505,12 +499,20 @@ def seller_change_order_status(
         request.session["seller_order_error"] = "Заказ не найден."
         return RedirectResponse("/seller/orders", status_code=303)
 
-    owns_items = user.role == "admin" or any(
-        item.product and item.product.owner_id == user.id
+    seller_items = [
+        item for item in (order.items or [])
+        if item.product and item.product.owner_id == user.id
+    ]
+    has_other_seller_items = any(
+        item.product and item.product.owner_id != user.id
         for item in (order.items or [])
     )
-    if not owns_items:
+    if user.role != "admin" and not seller_items:
         request.session["seller_order_error"] = "У вас нет доступа к этому заказу."
+        return RedirectResponse("/seller/orders", status_code=303)
+
+    if user.role != "admin" and has_other_seller_items:
+        request.session["seller_order_error"] = "Заказ содержит товары других продавцов. Статус нужно менять через администратора."
         return RedirectResponse("/seller/orders", status_code=303)
 
     current_status = normalize_order_status(order.status)
@@ -529,17 +531,16 @@ def seller_change_order_status(
         request.session["seller_order_error"] = "Для этого заказа сейчас недоступно выбранное действие."
         return RedirectResponse("/seller/orders", status_code=303)
 
+    if action != "cancel" and order.payment_status != "paid":
+        request.session["seller_order_error"] = "Заказ еще не оплачен. Дождитесь подтверждения оплаты."
+        return RedirectResponse("/seller/orders", status_code=303)
+
     cancel_reason = (cancel_reason or "").strip()
     if action == "cancel" and len(cancel_reason) < 5:
         request.session["seller_order_error"] = "Укажите причину отмены заказа."
         return RedirectResponse("/seller/orders", status_code=303)
 
     order.status = next_status
-    if next_status in {"confirmed", "assembling", "shipped", "delivering", "completed"} and order.payment_status != "paid":
-        if order.selected_payment_method == "cash":
-            order.payment_status = "pending"
-        elif current_status == "created":
-            order.payment_status = "paid"
 
     if next_status == "canceled":
         order.return_reason = "Отменено продавцом"

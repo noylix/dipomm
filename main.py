@@ -134,6 +134,27 @@ def _migrate_schema():
             ))
 
     # Миграция reviews
+    if "cart_items" in table_names:
+        indexes = inspector.get_indexes("cart_items")
+        has_cart_unique_index = any(
+            index.get("unique")
+            and list(index.get("column_names") or []) == ["user_id", "product_id"]
+            for index in indexes
+        )
+        with engine.begin() as conn:
+            conn.execute(text(
+                "DELETE FROM cart_items "
+                "WHERE id NOT IN ("
+                "SELECT min_id FROM ("
+                "SELECT MIN(id) AS min_id FROM cart_items GROUP BY user_id, product_id"
+                ") AS keepers)"
+            ))
+            if not has_cart_unique_index:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX uq_cart_items_user_product "
+                    "ON cart_items (user_id, product_id)"
+                ))
+
     if "reviews" in table_names:
         cols = {c["name"] for c in inspector.get_columns("reviews")}
         with engine.begin() as conn:
@@ -307,13 +328,26 @@ async def role_gate(request: Request, call_next):
         ],
         "admin": [
             "/admin/",
+            "/admin/backups",
             "/delivery/track/",
+            "/product/",
+            "/seller/",
             "/reviews/admin",
             "/complaints/admin",
             "/notifications/admin",
             "/admin/analytics/",
             "/admin/moderation",
             "/admin/manage",
+            "/logout",
+        ],
+        "manager": [
+            "/admin/moderation",
+            "/product/",
+            "/seller/",
+            "/reviews/admin",
+            "/complaints/admin",
+            "/admin/analytics/",
+            "/delivery/track/",
             "/logout",
         ],
         "accountant": [
@@ -326,6 +360,7 @@ async def role_gate(request: Request, call_next):
     role_home = {
         "accountant": "/accounting/",
         "admin": "/admin/",
+        "manager": "/admin/moderation",
         "seller": "/seller/",
     }.get(user.role)
     allowed = allowed_prefixes.get(user.role, [])
@@ -384,7 +419,18 @@ def _json_safe(value, depth=0, cache=None):
 
         data = {}
         cache[obj_id] = data
-        skip_columns = {"password_hash", "verification_token"}
+        skip_columns = {
+            "password_hash",
+            "verification_token",
+            "password_reset_token",
+            "password_reset_expires_at",
+            "email_verified",
+            "inn",
+            "passport_photo_url",
+            "supplier_document_url",
+            "supplier_registration_data",
+            "supplier_bank_details",
+        }
         for column in value.__table__.columns:
             if column.name in skip_columns:
                 continue
@@ -539,6 +585,56 @@ def init_test_data():
         if not db.query(Coupon).first():
             db.add(Coupon(code="FARM10", discount_percent=10, min_order=500, is_active=1))
             db.commit()
+
+        if not db.query(Review).first():
+            demo_review_users = [
+                ("buyer1@farm.local", "buyer123"),
+                ("buyer2@farm.local", "buyer456"),
+                ("buyer3@farm.local", "buyer789"),
+            ]
+            review_users = {}
+            for email, password in demo_review_users:
+                user_obj = db.query(User).filter(User.email == email).first()
+                if not user_obj:
+                    user_obj = User(
+                        email=email,
+                        password_hash=hash_password(password),
+                        role="user",
+                        is_approved=1,
+                        email_verified=1,
+                    )
+                    db.add(user_obj)
+                    db.flush()
+                review_users[email] = user_obj
+
+            product_by_name = {product.name: product for product in db.query(Product).all()}
+            demo_review_specs = [
+                ("buyer1@farm.local", "Яблоки сезонные", 5, "Очень сочные и свежие яблоки, приятно пахнут и без лишней мякоти.", "Спасибо за отзыв, рады, что яблоки понравились!"),
+                ("buyer2@farm.local", "Яблоки сезонные", 4, "Хорошие яблоки, вкус яркий. Пара штук была с небольшим потемнением.", None),
+                ("buyer3@farm.local", "Молоко фермерское", 5, "Молоко очень нежное, ребенку зашло отлично. Буду брать ещё.", "Спасибо! Всегда рады видеть вас снова."),
+                ("buyer1@farm.local", "Яйца домашние", 5, "Яйца крупные, свежие, желток насыщенный. Видно хорошее качество.", None),
+                ("buyer2@farm.local", "Мед натуральный", 5, "Мед густой и ароматный, без лишней сладости. Очень понравился.", "Спасибо за добрые слова!"),
+                ("buyer3@farm.local", "Картофель молодой", 4, "Картофель чистый и ровный, удобно чистить. Отлично подошел для запекания.", None),
+            ]
+            demo_reviews = []
+            for email, product_name, rating, text, seller_response in demo_review_specs:
+                user_obj = review_users.get(email)
+                product_obj = product_by_name.get(product_name)
+                if not user_obj or not product_obj:
+                    continue
+                demo_reviews.append(
+                    Review(
+                        user_id=user_obj.id,
+                        product_id=product_obj.id,
+                        rating=rating,
+                        text=text,
+                        seller_response=seller_response,
+                        seller_response_at=datetime.utcnow() if seller_response else None,
+                        status="approved",
+                    )
+                )
+            db.add_all(demo_reviews)
+            db.commit()
     finally:
         db.close()
 
@@ -653,12 +749,56 @@ def catalog_page(
     category: str = "",
     sort: str = "rating",
     page: int = 1,
-    min_price: float | None = None,
-    max_price: float | None = None,
+    min_price: str | None = None,
+    max_price: str | None = None,
     in_stock: str = "",
     has_certificate: str = "",
 ):
     """Страница каталога с фильтрацией по категории и сортировкой"""
+    def parse_price_filter(value: str | None) -> float | None:
+        if value is None or str(value).strip() == "":
+            return None
+        try:
+            number = float(str(value).replace(",", "."))
+        except (TypeError, ValueError):
+            return None
+        return number if number >= 0 else None
+
+    min_price_value = parse_price_filter(min_price)
+    max_price_value = parse_price_filter(max_price)
+    category_aliases = {
+        "молоко": "Молоко",
+        "молочное": "Молоко",
+        "молочные": "Молоко",
+        "мясо": "Мясо",
+        "курица": "Мясо",
+        "птица": "Мясо",
+        "овощи": "Овощи",
+        "овощ": "Овощи",
+        "зелень": "Овощи",
+        "фрукты": "Фрукты",
+        "фрукт": "Фрукты",
+        "ягоды": "Фрукты",
+        "ягода": "Фрукты",
+        "сладости": "Сладости",
+        "сладкое": "Сладости",
+        "бакалея": "Бакалея",
+        "хлеб": "Хлеб",
+        "выпечка": "Хлеб",
+        "консервы": "Консервы",
+        "заморозка": "Замороженные",
+        "замороженные": "Замороженные",
+        "напитки": "Напитки",
+        "сыр": "Сыр",
+        "сыры": "Сыр",
+        "яйца": "Яйца",
+        "яйцо": "Яйца",
+        "мёд": "Мёд",
+        "мед": "Мёд",
+    }
+    category = (category or "").strip().lower()
+    special_category = category if category in {"new", "popular", "sale"} else ""
+
     # Считаем рейтинг фермеров
     rating_subq = (
         db.query(
@@ -691,37 +831,26 @@ def catalog_page(
         or_(User.is_approved == 1, Product.owner_id == None)
     )
 
-    # Фильтр по категории
-    if category:
-        category_map = {
-            'молоко': 'Молоко',
-            'мясо': 'Мясо',
-            'курица': 'Мясо',
-            'овощи': 'Овощи',
-            'фрукты': 'Фрукты',
-            'сладости': 'Сладости',
-            'бакалея': 'Бакалея',
-            'хлеб': 'Хлеб',
-            'консервы': 'Консервы',
-            'заморозка': 'Замороженные',
-            'напитки': 'Напитки',
-            'сыр': 'Сыр',
-            'яйца': 'Яйца',
-            'мёд': 'Мёд'
-        }
-        cat_lower = category.lower()
-        if cat_lower in category_map:
-            query = query.filter(Product.category == category_map[cat_lower])
-        elif cat_lower == "new" and sort == "rating":
-            sort = "newest"
-        elif cat_lower == "popular" and sort == "rating":
-            sort = "popular"
-
     effective_price = effective_product_price_expr(Product)
-    if min_price is not None and min_price >= 0:
-        query = query.filter(effective_price >= min_price)
-    if max_price is not None and max_price >= 0:
-        query = query.filter(effective_price <= max_price)
+    if category in category_aliases:
+        query = query.filter(Product.category == category_aliases[category])
+    elif special_category == "new" and sort == "rating":
+        sort = "newest"
+    elif special_category == "popular" and sort == "rating":
+        sort = "popular"
+    elif special_category == "sale":
+        query = query.filter(
+            Product.discount_price.isnot(None),
+            Product.discount_price > 0,
+            Product.discount_price < Product.price,
+        )
+    else:
+        category = ""
+
+    if min_price_value is not None:
+        query = query.filter(effective_price >= min_price_value)
+    if max_price_value is not None:
+        query = query.filter(effective_price <= max_price_value)
     if in_stock == "1":
         query = query.filter(Product.stock > 0)
     if has_certificate == "1":
@@ -745,6 +874,9 @@ def catalog_page(
     per_page = 24
     page = max(page, 1)
     total = query.count()
+    total_pages = (total + per_page - 1) // per_page
+    if total_pages and page > total_pages:
+        page = total_pages
     rows = query.offset((page - 1) * per_page).limit(per_page).all()
 
     products = []
@@ -755,7 +887,6 @@ def catalog_page(
         products.append(product)
 
     user = get_optional_user(request, db)
-    total_pages = (total + per_page - 1) // per_page
     return templates.TemplateResponse(
         request, "catalog", {
             "products": products,
@@ -764,8 +895,8 @@ def catalog_page(
             "sort": sort,
             "page_num": page,
             "total_pages": total_pages,
-            "min_price": min_price,
-            "max_price": max_price,
+            "min_price": min_price_value,
+            "max_price": max_price_value,
             "in_stock": in_stock,
             "has_certificate": has_certificate,
         }

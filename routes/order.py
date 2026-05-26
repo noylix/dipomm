@@ -5,6 +5,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy import update
 from sqlalchemy.orm import Session, joinedload
 
 from auth import check_role, get_optional_user
@@ -32,7 +33,13 @@ from models import (
     User,
     Wallet,
 )
-from order_statuses import ORDER_STATUS_BADGES, ORDER_STATUS_LABELS, normalize_order_status
+from order_statuses import (
+    ORDER_STATUS_BADGES,
+    ORDER_STATUS_LABELS,
+    is_order_payable,
+    is_order_receivable,
+    normalize_order_status,
+)
 
 router = APIRouter(prefix="/order", tags=["order"])
 
@@ -40,7 +47,7 @@ DELIVERY_PRICES = {
     "courier": 500,
     "pickup": 0,
 }
-PAY_NOW_METHODS = {"yookassa"}
+PAY_NOW_METHODS = set()
 PAYMENT_METHODS = {"yookassa"}
 DELIVERY_SLOTS = {
     "10-14": ("10:00", "14:00"),
@@ -57,16 +64,16 @@ def _clear_checkout_form(request: Request) -> None:
 
 def _delivery_label(method: str) -> str:
     return {
-        "courier": "РљСѓСЂСЊРµСЂ",
-        "pickup": "РЎР°РјРѕРІС‹РІРѕР·",
-        "post": "РџСѓРЅРєС‚ РІС‹РґР°С‡Рё",
-        "market": "Р’С‹РґР°С‡Р° РЅР° СЂС‹РЅРєРµ",
+        "courier": "Курьер",
+        "pickup": "Самовывоз",
+        "post": "Пункт выдачи",
+        "market": "Выдача на рынке",
     }.get(method, method)
 
 
 def _payment_label(method: str) -> str:
     return {
-        "yookassa": "Р®Kassa",
+        "yookassa": "ЮKassa",
     }.get(method, method)
 
 
@@ -74,7 +81,7 @@ def _make_order_number() -> str:
     return f"FM-{datetime.utcnow():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
 
 
-def _reserve_stock(cart_items: list[CartItem]) -> tuple[bool, str]:
+def _reserve_stock(cart_items: list[CartItem], db: Session) -> tuple[bool, str]:
     for item in cart_items:
         product = item.product
         if not product or product.status != "approved":
@@ -88,7 +95,22 @@ def _reserve_stock(cart_items: list[CartItem]) -> tuple[bool, str]:
             )
     for item in cart_items:
         if item.product:
-            item.product.stock = product_stock_quantity(item.product) - int(item.quantity or 0)
+            quantity = int(item.quantity or 0)
+            result = db.execute(
+                update(Product)
+                .where(
+                    Product.id == item.product_id,
+                    Product.status == "approved",
+                    Product.stock >= quantity,
+                )
+                .values(stock=Product.stock - quantity)
+            )
+            if result.rowcount != 1:
+                return False, (
+                    f"Недостаточно товара: {item.product.name}. "
+                    f"Доступно только {product_stock_quantity(item.product)} {product_unit(item.product)}"
+                )
+            db.refresh(item.product)
     return True, ""
 
 
@@ -101,15 +123,17 @@ def _restore_order_stock(order: Order) -> None:
 def _charge_order(order: Order, user: User, db: Session, payment_method: str) -> tuple[bool, str]:
     if order.payment_status == "paid":
         return True, ""
+    if not is_order_payable(order.status, order.payment_status):
+        return False, "Заказ уже нельзя оплатить."
     if payment_method not in PAYMENT_METHODS:
-        return False, "РќРµРґРѕРїСѓСЃС‚РёРјС‹Р№ СЃРїРѕСЃРѕР± РѕРїР»Р°С‚С‹."
+        return False, "Недопустимый способ оплаты."
 
     wallet = db.query(Wallet).filter(Wallet.user_id == user.id).first()
     amount_to_pay = Decimal(order.total_price or 0)
 
     if payment_method == "wallet":
         if not wallet or Decimal(wallet.balance or 0) < amount_to_pay:
-            return False, "РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ СЃСЂРµРґСЃС‚РІ РІ РєРѕС€РµР»СЊРєРµ."
+            return False, "Недостаточно средств в кошельке."
         db.add(Transaction(
             wallet_id=wallet.id,
             user_id=user.id,
@@ -118,7 +142,7 @@ def _charge_order(order: Order, user: User, db: Session, payment_method: str) ->
             type="payment",
             status="completed",
             payment_method="wallet",
-            description=f"РћРїР»Р°С‚Р° Р·Р°РєР°Р·Р° #{order.id}",
+            description=f"Оплата заказа #{order.id}",
         ))
         wallet.balance = Decimal(wallet.balance or 0) - amount_to_pay
     else:
@@ -134,7 +158,7 @@ def _charge_order(order: Order, user: User, db: Session, payment_method: str) ->
             type="payment",
             status="completed",
             payment_method=payment_method,
-            description=f"РћРїР»Р°С‚Р° Р·Р°РєР°Р·Р° #{order.id}",
+            description=f"Оплата заказа #{order.id}",
             external_id=f"ext_{order.id}_{user.id}",
         ))
 
@@ -156,6 +180,7 @@ def order_create(
     comment: str = Form(""),
     payment_method: str = Form("yookassa"),
     coupon_code: str = Form(""),
+    seller_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = get_optional_user(request, db)
@@ -173,6 +198,7 @@ def order_create(
         "comment": (comment or "").strip(),
         "payment_method": (payment_method or "").strip(),
         "coupon_code": (coupon_code or "").strip(),
+        "seller_id": (seller_id or "").strip(),
     }
 
     # Backward compatibility for the old one-click checkout button.
@@ -181,15 +207,31 @@ def order_create(
         checkout_form["phone"],
         checkout_form["address"],
         checkout_form["delivery_date"],
-        checkout_form["delivery_slot_choice"],
         checkout_form["comment"],
         checkout_form["coupon_code"],
+        checkout_form["seller_id"],
     ])
     if legacy_submit:
-        checkout_form["full_name"] = (user.full_name or user.email or "РџРѕРєСѓРїР°С‚РµР»СЊ").strip()
-        checkout_form["phone"] = (user.phone or "РќРµ СѓРєР°Р·Р°РЅ").strip()
+        now = datetime.now()
+        delivery_date_value = now.strftime("%Y-%m-%d")
+        delivery_slot_value = next(
+            (slot for slot, (_, end) in DELIVERY_SLOTS.items() if now.hour < int(end.split(":")[0])),
+            None,
+        )
+        if not delivery_slot_value:
+            delivery_date_value = datetime.fromtimestamp(now.timestamp() + 86400).strftime("%Y-%m-%d")
+            delivery_slot_value = next(iter(DELIVERY_SLOTS))
+        checkout_form["full_name"] = (user.full_name or user.email or "Покупатель").strip()
+        checkout_form["phone"] = (user.phone or "Не указан").strip()
         checkout_form["delivery_method"] = "pickup"
+        checkout_form["delivery_date"] = delivery_date_value
+        checkout_form["delivery_slot_choice"] = delivery_slot_value
         checkout_form["payment_method"] = "yookassa"
+
+    delivery_method = checkout_form["delivery_method"]
+    payment_method = checkout_form["payment_method"]
+    delivery_slot_choice = checkout_form["delivery_slot_choice"]
+    coupon_code = checkout_form["coupon_code"]
 
     _store_checkout_form(request, checkout_form)
 
@@ -223,13 +265,52 @@ def order_create(
         request.session["cart_error"] = "Корзина пуста."
         return RedirectResponse(url="/cart/", status_code=303)
 
+    requested_seller_id = None
+    has_seller_filter = False
+    if checkout_form["seller_id"]:
+        has_seller_filter = True
+        if checkout_form["seller_id"] != "__none__":
+            try:
+                requested_seller_id = int(checkout_form["seller_id"])
+            except ValueError:
+                request.session["cart_error"] = "Выберите корректного продавца для оформления."
+                return RedirectResponse(url="/cart/", status_code=303)
+        cart_items = [
+            item for item in cart_items
+            if item.product and item.product.owner_id == requested_seller_id
+        ]
+        if not cart_items:
+            request.session["cart_error"] = "В корзине нет товаров выбранного продавца."
+            return RedirectResponse(url="/cart/", status_code=303)
+
     subtotal = Decimal("0")
+    seller_ids = set()
+    seller_subtotals: dict[int | None, Decimal] = {}
+    seller_minimums: dict[int | None, Decimal] = {}
     for item in cart_items:
         product = item.product
-        if not product:
+        if not product or product.status != "approved":
             request.session["cart_error"] = "Один из товаров больше недоступен."
             return RedirectResponse(url="/cart/", status_code=303)
-        subtotal += Decimal(effective_product_price(product)) * item.quantity
+        seller_id = product.owner_id
+        seller_ids.add(seller_id)
+        item_total = Decimal(effective_product_price(product)) * item.quantity
+        subtotal += item_total
+        seller_subtotals[seller_id] = seller_subtotals.get(seller_id, Decimal("0")) + item_total
+        seller_minimums[seller_id] = max(
+            Decimal(str((product.owner.min_order_amount if product.owner else 0) or 0)),
+            MIN_ORDER_AMOUNT,
+        )
+
+    if len(seller_ids) > 1 and not has_seller_filter:
+        request.session["cart_error"] = "В одном заказе пока можно оформить товары только одного продавца. Оставьте в корзине позиции одного фермера и оформите заказ."
+        return RedirectResponse(url="/cart/", status_code=303)
+
+    for seller_id, seller_subtotal in seller_subtotals.items():
+        seller_minimum = seller_minimums.get(seller_id, MIN_ORDER_AMOUNT)
+        if minimum_order_shortage(seller_subtotal, seller_minimum) > 0:
+            request.session["cart_error"] = minimum_order_message(seller_subtotal, seller_minimum)
+            return RedirectResponse(url="/cart/", status_code=303)
 
     if minimum_order_shortage(subtotal, MIN_ORDER_AMOUNT) > 0:
         request.session["cart_error"] = minimum_order_message(subtotal, MIN_ORDER_AMOUNT)
@@ -278,8 +359,9 @@ def order_create(
     platform_fee = (goods_total * commission_percent / Decimal("100")).quantize(Decimal("0.01"))
     delivery_slot = f"{delivery_date.strip()} {slot_start}-{slot_end}"
 
-    ok, stock_error = _reserve_stock(cart_items)
+    ok, stock_error = _reserve_stock(cart_items, db)
     if not ok:
+        db.rollback()
         request.session["cart_error"] = stock_error
         return RedirectResponse(url="/cart/", status_code=303)
 
@@ -325,19 +407,19 @@ def order_create(
     db.add(Notification(
         user_id=user.id,
         type="email",
-        subject="Р—Р°РєР°Р· СЃРѕР·РґР°РЅ",
+        subject="Заказ создан",
         body=(
-            f"Р—Р°РєР°Р· #{order.id} СЃРѕР·РґР°РЅ. "
+            f"Заказ #{order.id} создан. "
             f"Способ получения: {_delivery_label(delivery_method)}. "
-            f"РћРїР»Р°С‚Р°: {_payment_label(payment_method)}."
+            f"Оплата: {_payment_label(payment_method)}."
         ),
     ))
     db.commit()
 
     _clear_checkout_form(request)
     request.session["order_success"] = (
-        f"Р—Р°РєР°Р· #{order.id} РѕС„РѕСЂРјР»РµРЅ. "
-        + ("РћРїР»Р°С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР°." if order.payment_status == "paid" else "РЎС‚Р°С‚СѓСЃ: РѕР¶РёРґР°РµС‚ РѕРїР»Р°С‚С‹.")
+        f"Заказ #{order.id} оформлен. "
+        + ("Оплата подтверждена." if order.payment_status == "paid" else "Статус: ожидает оплаты.")
     )
     if payment_method == "yookassa":
         return RedirectResponse(url=f"/payment/{order.id}", status_code=303)
@@ -421,7 +503,7 @@ def order_pay_stub(order_id: int, request: Request, db: Session = Depends(get_db
         return guard
 
     order = db.query(Order).filter(Order.id == order_id, Order.user_id == user.id).first()
-    if order and order.payment_status == "pending":
+    if order and is_order_payable(order.status, order.payment_status):
         payment_method = order.selected_payment_method or "card"
         if payment_method == "yookassa":
             return RedirectResponse(f"/payment/{order.id}", status_code=303)
@@ -434,11 +516,11 @@ def order_pay_stub(order_id: int, request: Request, db: Session = Depends(get_db
         db.add(Notification(
             user_id=order.user_id,
             type="email",
-            subject="РћРїР»Р°С‚Р° РїРѕР»СѓС‡РµРЅР°",
-            body=f"Р—Р°РєР°Р· #{order.id} РѕРїР»Р°С‡РµРЅ. РЎСЂРµРґСЃС‚РІР° Р·Р°РјРѕСЂРѕР¶РµРЅС‹ РґРѕ РїРѕР»СѓС‡РµРЅРёСЏ С‚РѕРІР°СЂР°.",
+            subject="Оплата получена",
+            body=f"Заказ #{order.id} оплачен. Средства заморожены до получения товара.",
         ))
         db.commit()
-        request.session["payment_success"] = f"Р—Р°РєР°Р· #{order.id} РѕРїР»Р°С‡РµРЅ"
+        request.session["payment_success"] = f"Заказ #{order.id} оплачен"
     return RedirectResponse("/order/orders", status_code=303)
 
 
@@ -450,7 +532,7 @@ def order_complete(order_id: int, request: Request, db: Session = Depends(get_db
         return guard
 
     order = db.query(Order).filter(Order.id == order_id, Order.user_id == user.id).first()
-    if order and normalize_order_status(order.status) in ("confirmed", "paid", "assembling", "shipped", "delivering"):
+    if order and is_order_receivable(order.status):
         order.status = "completed"
         order.escrow_status = "released"
         db.commit()
@@ -458,8 +540,8 @@ def order_complete(order_id: int, request: Request, db: Session = Depends(get_db
         db.add(Notification(
             user_id=order.user_id,
             type="email",
-            subject="Р—Р°РєР°Р· Р·Р°РІРµСЂС€РµРЅ",
-            body=f"Р—Р°РєР°Р· #{order.id} РїРѕР»СѓС‡РµРЅ. РЎРїР°СЃРёР±Рѕ Р·Р° РїРѕРєСѓРїРєСѓ!",
+            subject="Заказ завершен",
+            body=f"Заказ #{order.id} получен. Спасибо за покупку!",
         ))
         db.commit()
     return RedirectResponse("/order/orders", status_code=303)
@@ -547,11 +629,11 @@ def order_repeat(order_id: int, request: Request, db: Session = Depends(get_db))
         if len(skipped_names) > 3:
             visible_names += ", ..."
         request.session["cart_success"] = (
-            f"Р’ РєРѕСЂР·РёРЅСѓ РґРѕР±Р°РІР»РµРЅС‹ С‚РѕРІР°СЂС‹ РёР· Р·Р°РєР°Р·Р° #{order.id}. "
-            f"РќРµРґРѕСЃС‚СѓРїРЅС‹Рµ РїРѕР·РёС†РёРё РїСЂРѕРїСѓС‰РµРЅС‹: {visible_names}."
+            f"В корзину добавлены товары из заказа #{order.id}. "
+            f"Недоступные позиции пропущены: {visible_names}."
         )
     else:
-        request.session["cart_success"] = f"РўРѕРІР°СЂС‹ РёР· Р·Р°РєР°Р·Р° #{order.id} СЃРЅРѕРІР° РґРѕР±Р°РІР»РµРЅС‹ РІ РєРѕСЂР·РёРЅСѓ."
+        request.session["cart_success"] = f"Товары из заказа #{order.id} снова добавлены в корзину."
 
     return RedirectResponse("/cart/", status_code=303)
 

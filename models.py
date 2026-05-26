@@ -1,7 +1,7 @@
 # models.py
 # Модели SQLAlchemy для фермерского маркетплейса
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, Boolean, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database import Base
@@ -113,6 +113,9 @@ class FarmCertificate(Base):
 
 class CartItem(Base):
     __tablename__ = "cart_items"
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_cart_items_user_product"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
