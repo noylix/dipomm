@@ -5,13 +5,13 @@ import base64
 import json
 import os
 import uuid
+from datetime import datetime
 from urllib import request as urllib_request
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from starlette.middleware.sessions import SessionMiddleware
 from decimal import Decimal
 from config import APP_BASE_URL
 
@@ -19,7 +19,7 @@ from database import get_db
 from models import User, Wallet, Transaction, PaymentMethod, Order
 from auth import get_optional_user, check_role
 from marketplace_utils import product_stock_quantity
-from order_statuses import normalize_order_status
+from order_statuses import is_order_payable, normalize_order_status
 
 router = APIRouter(prefix="/payment", tags=["payment"])
 templates = Jinja2Templates(directory="templates")
@@ -29,6 +29,18 @@ ALLOWED_PAYMENT_METHODS = {"card_on_delivery", "cash", "wallet", "yookassa"}
 YOOKASSA_API_URL = "https://api.yookassa.ru/v3/payments"
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "")
+
+
+def _mark_order_paid(order: Order, payment_id: str | None = None) -> None:
+    amount = Decimal(order.total_price or 0)
+    order.payment_status = "paid"
+    order.status = "confirmed"
+    order.escrow_status = "pending"
+    order.payment_id = payment_id or order.payment_id
+    order.payment_amount = amount
+    order.paid_at = datetime.utcnow()
+    if order.delivery:
+        order.delivery.status = "waiting_assembly"
 
 
 def _resolve_return_url(request: Request) -> str:
@@ -241,7 +253,8 @@ def payment_page(order_id: int, request: Request, db: Session = Depends(get_db))
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
 
-    if order.payment_status == "paid":
+    if not is_order_payable(order.status, order.payment_status):
+        request.session["payment_error"] = "Этот заказ уже нельзя оплатить."
         return RedirectResponse(url="/order/orders", status_code=303)
 
     # Получаем кошелёк и платёжные методы
@@ -274,7 +287,8 @@ def yookassa_demo_page(order_id: int, request: Request, db: Session = Depends(ge
     ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
-    if order.payment_status == "paid":
+    if not is_order_payable(order.status, order.payment_status):
+        request.session["payment_error"] = "Этот заказ уже нельзя оплатить."
         return RedirectResponse(url="/order/orders", status_code=303)
 
     return templates.TemplateResponse("payment_demo", {
@@ -298,7 +312,8 @@ def yookassa_demo_complete(order_id: int, request: Request, db: Session = Depend
     if not order:
         request.session["payment_error"] = "Заказ не найден"
         return RedirectResponse(url="/order/orders", status_code=303)
-    if order.payment_status == "paid":
+    if not is_order_payable(order.status, order.payment_status):
+        request.session["payment_error"] = "Этот заказ уже нельзя оплатить."
         return RedirectResponse(url="/order/orders", status_code=303)
 
     wallet = db.query(Wallet).filter(Wallet.user_id == user.id).first()
@@ -319,9 +334,7 @@ def yookassa_demo_complete(order_id: int, request: Request, db: Session = Depend
         description=f"Демо-оплата заказа #{order.id} через ЮKassa",
         external_id=f"demo_yookassa_{order.id}_{user.id}",
     ))
-    order.payment_status = "paid"
-    order.status = "paid"
-    order.escrow_status = "pending"
+    _mark_order_paid(order, f"demo_yookassa_{order.id}_{user.id}")
     order.selected_payment_method = "yookassa"
     db.commit()
 
@@ -348,7 +361,9 @@ def process_payment(
         Order.user_id == user.id
     ).first()
 
-    if not order or order.payment_status == "paid":
+    if not order or not is_order_payable(order.status, order.payment_status):
+        if order:
+            request.session["payment_error"] = "Этот заказ уже нельзя оплатить."
         return RedirectResponse(url="/order/orders", status_code=303)
 
     if payment_method not in ALLOWED_PAYMENT_METHODS:
@@ -442,9 +457,7 @@ def process_payment(
         return RedirectResponse(url=confirmation_url, status_code=303)
 
     # Обновляем статус заказа
-    order.payment_status = "paid"
-    order.status = "paid"
-    order.escrow_status = "pending"
+    _mark_order_paid(order, transaction.external_id if "transaction" in locals() else None)
     db.commit()
 
     request.session["payment_success"] = f"Заказ #{order.id} оплачен"
@@ -479,10 +492,13 @@ async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
     ).order_by(Transaction.id.desc()).first()
 
     if event == "payment.succeeded":
+        if not is_order_payable(order.status, order.payment_status):
+            if tx and tx.status == "pending":
+                tx.status = "failed"
+            db.commit()
+            return {"ok": True}
         if order.payment_status != "paid":
-            order.payment_status = "paid"
-            order.status = "paid"
-            order.escrow_status = "pending"
+            _mark_order_paid(order, payment_id)
         if tx:
             tx.status = "completed"
         db.commit()

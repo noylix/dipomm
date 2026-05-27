@@ -1,0 +1,65 @@
+15: "�����",
+16: "������",
+17: "�����",
+18: "������",
+19: "����",
+20: "����",
+21: "�����",
+22: "����",
+23: "̸�",
+24: "����",
+25: "�������",
+26: "�������",
+27: "��������",
+28: "���������",
+29: "��������",
+30: "������"
+32: const PRODUCT_UNITS = ["��", "��", "�", "�����", "��������", "�����", "�������"];
+327: if (name.includes("���") || category.includes("���")) return "milk";
+328: if (name.includes("���")) return "egg";
+329: if (name.includes("���") || name.includes("��")) return "hexagon";
+330: if (name.includes("����") || name.includes("����") || name.includes("�����") || name.includes("������")) return "cherry";
+331: if (name.includes("���") || name.includes("����") || category.includes("�����")) return "apple";
+332: if (name.includes("���") || name.includes("������") || category.includes("���")) return "beef";
+333: if (category.includes("����") || name.includes("�����") || name.includes("������")) return "carrot";
+528: }, h("button", { type: "submit", className: "react-btn danger" }, children || "�������� �����")),
+532: title: "�������� �����",
+533: text: "�� �������, ��� ������ �������� ���� �����?",
+536: cancelLabel: "��������",
+537: confirmLabel: "�������� �����",
+1098: setMessage(result.ok ? "" : (data.message || "�� ������� �������� �������."));
+1100: .catch(() => setMessage("�� ������� �������� �������."))
+1653: let nextError = "�������� email ��� ������";
+1663: setLoginError("�� ������� �����. ��������� ����� � ������ � ���������� ��� ���.");
+1752: const minOrderText = `����������� ����� ������: ${money(minOrderAmount)}`;
+1753: const minOrderMessage = props.min_order_message || `����������� ����� ������ � ${money(minOrderAmount)}. �������� ������ ��� �� ${money(minO
+1760: const sellerName = group.seller_name || "��������";
+1761: const buttonLabel = multipleSellers ? `�������� � ${sellerName}` : "�������� �����";
+1773: groupDisabled && h("span", { className: "react-cart-min-order-warning" }, `�������� ������ � ����� �������� ��� �� ${money(groupShortage)}.`
+1792: h("span", { className: "react-muted" }, `${groupItems.length} ���.`),
+1795: groupShortage > 0 && h("span", { className: "react-cart-min-order-warning" }, `�� ������������ ������ � ��������: ${money(groupShortage)}.`)
+1803: h("div", { className: "react-cart-summary-row" }, [h("span", null, multipleSellers ? "�������� �� �����" : "\u0414\u043e\u0441\u0442\u0430\u
+1805: multipleSellers && h("p", { className: "react-muted react-cart-min-order" }, "� ������� ������ ������ ���������. �������� �� ���������� ����
+1814: h("label", { className: "react-muted" }, "������ ��������"),
+1816: h("button", { type: "button", className: `react-chip react-chip-button ${deliveryMethod === "pickup" ? "active" : ""}`, onClick: () => setDe
+1817: h("button", { type: "button", className: `react-chip react-chip-button ${deliveryMethod === "courier" ? "active" : ""}`, onClick: () => setD
+1821: h("label", { className: "react-muted" }, "������ ������"),
+1823: h("button", { type: "button", className: "react-chip react-chip-button active", onClick: () => setPaymentMethod("yookassa") }, "������")
+1830: h("label", { className: "react-muted" }, "���� ��������"),
+1854: title: "����������� ����� ������",
+1999: Select({ name: "category", defaultValue: product.category || "������" }, PRODUCT_CATEGORIES.map(category => h("option", { key: category, val
+2187: (deliveryProvider || trackNumber) ? h("div", { className: "react-card react-logistics-card" }, [h("b", null, "���������"), h("p", null, deli
+2340: order.delivery_provider ? h("p", { className: "react-muted" }, `���������: ${order.delivery_provider}`) : null,
+2341: order.delivery_track_number ? h("p", { className: "react-muted" }, `����: ${order.delivery_track_number}`) : null,
+2342: order.delivery_track_number ? ButtonLink({ href: order.delivery_tracking_url || `/delivery/track/${order.delivery_track_number}`, className:
+3240: { id: "accepted", label: "������� ����������" },
+3241: { id: "in_transit", label: "� ����" },
+3242: { id: "delivered", label: "����������" }
+3251: h("h1", null, "������������ ��������"),
+3252: h("p", { className: "react-muted" }, `����� ${orderDisplayNumber(order)}`)
+3254: ButtonLink({ href: user && user.role === "seller" ? "/seller/orders" : "/order/orders", className: "secondary" }, "� �������")
+3257: h("div", { className: "react-card react-logistics-card" }, [h("b", null, "������������� ��������"), h("p", null, delivery.provider || "�����
+3258: h("div", { className: "react-card react-logistics-card" }, [h("b", null, "����-�����"), h("p", { className: "react-track-number" }, delivery
+3259: h("div", { className: "react-card react-logistics-card" }, [h("b", null, "������"), h("p", { className: "react-logistics-status" }, logistic
+3260: h("div", { className: "react-card react-logistics-card" }, [h("b", null, "�����"), h("p", null, delivery.address || order.delivery_address |
+3263: h("h2", null, "�������"),

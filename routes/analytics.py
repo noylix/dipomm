@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
-from models import Order, OrderItem, Product, User, Delivery, Review, Complaint
+from models import Order, OrderItem, Product, User, Complaint
 from auth import get_optional_user, check_role
 from marketplace_utils import effective_product_price_expr
 
@@ -26,7 +26,7 @@ def analytics_page(
 ):
     """Страница аналитики для админа/менеджера"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
@@ -139,10 +139,16 @@ def analytics_page(
 
 @router.get("/export.csv")
 def analytics_export_csv(
+    request: Request,
     db: Session = Depends(get_db),
     date_from: str = "",
     date_to: str = "",
 ):
+    user = get_optional_user(request, db)
+    guard = check_role(user, ["admin", "manager"])
+    if guard:
+        return guard
+
     parsed_from = None
     parsed_to = None
     if date_from:

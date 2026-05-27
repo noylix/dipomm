@@ -1,34 +1,82 @@
 # routes/admin.py
 # Административные функции (только admin и manager)
 
-from fastapi import APIRouter, Depends, Request, Form, UploadFile, File
+from datetime import datetime
+from pathlib import Path
+import zipfile
+
+from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
-from database import get_db
+from database import DATABASE_URL, get_db
 from models import Notification, Order, OrderItem, PlatformSetting, Product, User
 from auth import get_optional_user, check_role
 from marketplace_utils import product_stock_quantity
-from routes.seller import _clean_product_payload, _save_product_image
 from order_statuses import ORDER_STATUSES, ORDER_STATUS_BADGES, ORDER_STATUS_LABELS, is_valid_order_status, normalize_order_status
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BACKUPS_DIR = PROJECT_ROOT / "backups"
+UPLOADS_DIR = PROJECT_ROOT / "static" / "uploads"
+BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+
 FARMER_APPLICATION_STATUSES = (
-    "new",
-    "in_progress",
-    "waiting_documents",
+    "pending",
     "approved",
     "rejected",
 )
 FARMER_APPLICATION_STATUS_LABELS = {
-    "new": "Новая",
-    "in_progress": "В обработке",
-    "waiting_documents": "Ожидаются документы",
+    "pending": "На проверке",
     "approved": "Одобрена",
     "rejected": "Отклонена",
-    "pending": "Новая",
+    # Совместимость со старыми значениями
+    "new": "На проверке",
+    "in_progress": "На проверке",
+    "waiting_documents": "На проверке",
 }
+
+
+def _sqlite_database_path() -> Path | None:
+    prefix = "sqlite:///"
+    if not DATABASE_URL.startswith(prefix):
+        return None
+    return Path(DATABASE_URL[len(prefix):]).resolve()
+
+
+def _collect_backups() -> list[dict[str, object]]:
+    if not BACKUPS_DIR.exists():
+        return []
+
+    backups: list[dict[str, object]] = []
+    for archive in sorted(BACKUPS_DIR.glob("*.zip"), key=lambda path: path.stat().st_mtime, reverse=True):
+        stat_result = archive.stat()
+        backups.append({
+            "name": archive.name,
+            "size": stat_result.st_size,
+            "created_at": datetime.fromtimestamp(stat_result.st_mtime),
+        })
+    return backups
+
+
+def _create_backup_archive() -> Path:
+    db_path = _sqlite_database_path()
+    if not db_path or not db_path.exists():
+        raise FileNotFoundError("Файл базы данных не найден.")
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    archive_path = BACKUPS_DIR / f"backup-{timestamp}.zip"
+
+    with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(db_path, arcname=f"database/{db_path.name}")
+
+        if UPLOADS_DIR.exists():
+            for file_path in UPLOADS_DIR.rglob("*"):
+                if file_path.is_file():
+                    archive.write(file_path, arcname=f"uploads/{file_path.relative_to(UPLOADS_DIR).as_posix()}")
+
+    return archive_path
 
 
 @router.get("/")
@@ -58,6 +106,42 @@ def admin_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/backups")
+def admin_backups_page(request: Request, db: Session = Depends(get_db)):
+    """Резервное копирование — только admin"""
+    user = get_optional_user(request, db)
+    guard = check_role(user, ["admin"])
+    if guard:
+        return guard
+
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "backups",
+        {
+            "user": user,
+            "backups": _collect_backups(),
+            "backup_success": request.session.pop("backup_success", None),
+            "backup_error": request.session.pop("backup_error", None),
+        },
+    )
+
+
+@router.post("/backups/create")
+def admin_create_backup(request: Request, db: Session = Depends(get_db)):
+    """Создать ZIP-архив с базой и загрузками."""
+    user = get_optional_user(request, db)
+    guard = check_role(user, ["admin"])
+    if guard:
+        return guard
+
+    try:
+        archive_path = _create_backup_archive()
+        request.session["backup_success"] = f"Резервная копия создана: {archive_path.name}"
+    except Exception as exc:
+        request.session["backup_error"] = f"Не удалось создать резервную копию: {exc}"
+    return RedirectResponse(url="/admin/backups", status_code=303)
+
+
 @router.get("/manage")
 def admin_manage_page(request: Request, db: Session = Depends(get_db)):
     """Управление товарами и пользователями — только admin"""
@@ -79,6 +163,7 @@ def admin_manage_page(request: Request, db: Session = Depends(get_db)):
             "status_badges": ORDER_STATUS_BADGES,
             "user": user,
             "admin_error": request.session.pop("admin_error", None),
+            "admin_success": request.session.pop("admin_success", None),
         }
     )
 
@@ -96,27 +181,44 @@ def admin_change_order_status(
     if guard:
         return guard
 
-    if is_valid_order_status(status):
-        order = (
-            db.query(Order)
-            .options(joinedload(Order.items).joinedload(OrderItem.product))
-            .filter(Order.id == order_id)
-            .first()
-        )
-        if order:
-            previous_status = normalize_order_status(order.status)
-            order.status = status
-            if status in ("confirmed", "paid", "assembling", "shipped", "delivering", "completed"):
-                order.payment_status = "paid"
-            if status == "completed":
-                order.escrow_status = "released"
-            if status in ("canceled", "refunded") and previous_status not in ("canceled", "refunded"):
-                for item in order.items or []:
-                    if item.product and item.quantity:
-                        item.product.stock = product_stock_quantity(item.product) + int(item.quantity or 0)
-            if status == "refunded":
-                order.escrow_status = "refunded"
-            db.commit()
+    if not is_valid_order_status(status):
+        request.session["admin_error"] = "Недопустимый статус заказа."
+        return RedirectResponse(url="/admin/manage", status_code=303)
+
+    desired_status = normalize_order_status(status)
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .filter(Order.id == order_id)
+        .first()
+    )
+    if not order:
+        request.session["admin_error"] = "Заказ не найден."
+        return RedirectResponse(url="/admin/manage", status_code=303)
+
+    previous_status = normalize_order_status(order.status)
+    is_paid = order.payment_status == "paid"
+    paid_only_statuses = {"paid", "confirmed", "assembling", "ready_for_pickup", "ready_for_delivery", "in_delivery", "delivered", "received", "completed"}
+
+    if desired_status in paid_only_statuses and not is_paid:
+        request.session["admin_error"] = "Нельзя перевести заказ в оплаченный этап без платежа."
+        return RedirectResponse(url="/admin/manage", status_code=303)
+    if desired_status == "refunded":
+        request.session["admin_error"] = "Возврат оформляется через бухгалтерию, чтобы создать транзакцию и вернуть деньги."
+        return RedirectResponse(url="/admin/manage", status_code=303)
+    if desired_status == "cancelled" and is_paid:
+        request.session["admin_error"] = "Оплаченный заказ нельзя просто отменить: используйте возврат через бухгалтерию."
+        return RedirectResponse(url="/admin/manage", status_code=303)
+
+    order.status = desired_status
+    if desired_status == "completed" and is_paid:
+        order.escrow_status = "released"
+    if desired_status == "cancelled" and previous_status not in ("cancelled", "refunded"):
+        for item in order.items or []:
+            if item.product and item.quantity:
+                item.product.stock = product_stock_quantity(item.product) + int(item.quantity or 0)
+    db.commit()
+    request.session["admin_success"] = f"Статус заказа #{order.id} обновлен."
     return RedirectResponse(url="/admin/manage", status_code=303)
 
 
@@ -124,7 +226,7 @@ def admin_change_order_status(
 def admin_moderation_page(request: Request, db: Session = Depends(get_db)):
     """Модерация товаров и продавцов — для admin"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
@@ -151,11 +253,11 @@ def admin_moderation_page(request: Request, db: Session = Depends(get_db)):
     )
     pending_sellers = [
         seller for seller in farmer_applications
-        if (seller.seller_application_status or "new") != "approved"
+        if (seller.seller_application_status or "pending") != "approved"
     ]
     approved_sellers = [
         seller for seller in farmer_applications
-        if (seller.seller_application_status or "new") == "approved"
+        if (seller.seller_application_status or "pending") == "approved"
     ]
     return request.app.state.templates.TemplateResponse(
         request, "manager",
@@ -177,7 +279,7 @@ def admin_moderation_page(request: Request, db: Session = Depends(get_db)):
 def admin_approve_product(product_id: int, request: Request, db: Session = Depends(get_db)):
     """Одобрить товар — admin"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -206,7 +308,7 @@ def admin_reject_product(
 ):
     """Отклонить товар — admin"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -223,82 +325,6 @@ def admin_reject_product(
             ))
             db.commit()
     return RedirectResponse(url="/admin/moderation", status_code=303)
-
-
-@router.post("/product/add")
-def admin_add_product(
-    request: Request,
-    name: str = Form(...),
-    price: float = Form(...),
-    discount_price: str = Form(""),
-    category: str = Form("Другое"),
-    variety: str = Form(""),
-    weight_per_unit: str = Form(""),
-    expiration_days: int = Form(0),
-    has_certificate: int = Form(0),
-    region: str = Form(""),
-    stock: int = Form(0),
-    unit: str = Form("\u0448\u0442"),
-    low_stock_threshold: int = Form(0),
-    owner_id: int = Form(0),
-    description: str = Form(""),
-    image: UploadFile = File(None),
-    db: Session = Depends(get_db)
-):
-    """Добавить товар с фото — только admin"""
-    user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
-    if guard:
-        return guard
-
-    # Если owner_id не указан — товар принадлежит админу
-    parsed_discount = None
-    if str(discount_price).strip():
-        try:
-            parsed_discount = float(discount_price)
-        except ValueError:
-            request.session["admin_error"] = "Скидочная цена должна быть числом."
-            return RedirectResponse(url="/admin/manage", status_code=303)
-
-    is_valid, error = _clean_product_payload(
-        name,
-        price,
-        parsed_discount,
-        category,
-        expiration_days,
-        stock,
-        unit,
-        low_stock_threshold,
-        description,
-    )
-    if not is_valid:
-        request.session["admin_error"] = error
-        return RedirectResponse(url="/admin/manage", status_code=303)
-
-    product_owner = owner_id if owner_id > 0 else user.id
-    if owner_id > 0:
-        owner = db.query(User).filter(User.id == owner_id, User.role.in_(("seller", "admin"))).first()
-        if not owner:
-            request.session["admin_error"] = "Укажите существующего продавца"
-            return RedirectResponse(url="/admin/manage", status_code=303)
-    image_url = _save_product_image(image)
-    product = Product(
-        name=name, price=price, discount_price=parsed_discount, owner_id=product_owner,
-        category=category, variety=variety or None,
-        weight_per_unit=weight_per_unit or None,
-        expiration_days=expiration_days if expiration_days > 0 else None,
-        has_certificate=has_certificate,
-        region=region or None,
-        stock=stock,
-        unit=(unit or "\u0448\u0442").strip(),
-        low_stock_threshold=low_stock_threshold,
-        image_url=image_url,
-        description=description or None,
-        status="approved"
-    )
-    db.add(product)
-    db.commit()
-    return RedirectResponse(url="/admin/manage", status_code=303)
 
 
 @router.post("/product/delete/{product_id}")
@@ -334,15 +360,24 @@ def admin_change_role(
     if guard:
         return guard
 
-    if role in ("user", "seller", "admin", "accountant"):
+    if role in ("user", "seller", "manager", "admin", "accountant"):
         target = db.query(User).filter(User.id == user_id).first()
         if target:
+            if target.id == me.id and role != "admin":
+                request.session["admin_error"] = "Нельзя снять роль администратора у текущей учетной записи."
+                return RedirectResponse(url="/admin/manage", status_code=303)
+            if target.role == "admin" and role != "admin":
+                admins_count = db.query(User).filter(User.role == "admin").count()
+                if admins_count <= 1:
+                    request.session["admin_error"] = "Нельзя снять роль у последнего администратора."
+                    return RedirectResponse(url="/admin/manage", status_code=303)
             target.role = role
             # При повышении до seller — авто-одобрение, чтобы товары были видимы
             if role == "seller":
                 target.is_approved = 1
                 target.seller_application_status = "approved"
             db.commit()
+            request.session["admin_success"] = "Роль пользователя обновлена."
     return RedirectResponse(url="/admin/manage", status_code=303)
 
 
@@ -380,15 +415,15 @@ def admin_update_farmer_application(
     db: Session = Depends(get_db),
 ):
     me = get_optional_user(request, db)
-    guard = check_role(me, ["admin"])
+    guard = check_role(me, ["admin", "manager"])
     if guard:
         return guard
 
     normalized_status = (status or "").strip()
-    if normalized_status == "pending":
-        normalized_status = "new"
+    if normalized_status in ("new", "in_progress", "waiting_documents", ""):
+        normalized_status = "pending"
     if normalized_status not in FARMER_APPLICATION_STATUSES:
-        normalized_status = "new"
+        normalized_status = "pending"
 
     target = db.query(User).filter(User.id == user_id, User.role == "seller").first()
     if target:
@@ -419,7 +454,7 @@ def admin_approve_seller(
 ):
     """Одобрить или заблокировать фермера — admin или manager"""
     me = get_optional_user(request, db)
-    guard = check_role(me, ["admin"])
+    guard = check_role(me, ["admin", "manager"])
     if guard:
         return guard
 

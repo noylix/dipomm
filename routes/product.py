@@ -28,7 +28,7 @@ def product_detail(product_id: int, request: Request, db: Session = Depends(get_
     user = get_optional_user(request, db)
     if product.status != "approved":
         is_owner = user and product.owner_id == user.id
-        is_admin = user and user.role == "admin"
+        is_admin = user and user.role in ("admin", "manager")
         if not (is_owner or is_admin):
             return RedirectResponse("/", status_code=303)
 

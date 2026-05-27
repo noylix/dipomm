@@ -1,5 +1,5 @@
-﻿# routes/cart.py
-# Р Р°Р±РѕС‚Р° СЃ РєРѕСЂР·РёРЅРѕР№ РїРѕРєСѓРїРѕРє (С‚РѕР»СЊРєРѕ РґР»СЏ Р°РІС‚РѕСЂРёР·РѕРІР°РЅРЅС‹С…)
+# routes/cart.py
+# Работа с корзиной покупок (только для авторизованных)
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -16,6 +16,7 @@ from marketplace_utils import (
     product_stock_quantity,
     product_unit,
 )
+from routes.order import _seller_delivery_options, _seller_slots
 
 router = APIRouter(prefix="/cart", tags=["cart"])
 
@@ -57,7 +58,7 @@ def cart_state(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/")
 def cart_list(request: Request, db: Session = Depends(get_db)):
-    """РЎС‚СЂР°РЅРёС†Р° РєРѕСЂР·РёРЅС‹ СЃ РіСЂСѓРїРїРёСЂРѕРІРєРѕР№ РїРѕ С„РµСЂРјРµСЂР°Рј (split-РєРѕСЂР·РёРЅР°)"""
+    """Страница корзины с группировкой по фермерам (split-корзина)"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -107,7 +108,7 @@ def cart_list(request: Request, db: Session = Depends(get_db)):
 
     items = valid_items
 
-    # Р“СЂСѓРїРїРёСЂРѕРІРєР° РїРѕ С„РµСЂРјРµСЂСѓ (split-РєРѕСЂР·РёРЅР°)
+    # Группировка по фермеру (split-корзина)
     groups = {}
     for item in items:
         seller_id = item.product.owner_id if item.product else 0
@@ -122,12 +123,15 @@ def cart_list(request: Request, db: Session = Depends(get_db)):
                 "cart_items": [],
                 "subtotal": 0,
                 "min_order_amount": max(float(seller.min_order_amount or 0), float(MIN_ORDER_AMOUNT)) if seller else float(MIN_ORDER_AMOUNT),
+                "delivery_options": _seller_delivery_options(seller) if seller else [],
+                "delivery_slots": _seller_slots(seller) if seller else ["10-14", "14-18", "18-22"],
+                "pickup_address": (seller.pickup_address or seller.farm_address or "") if seller else "",
                 "shortage": 0,
                 "is_min_order_met": True,
             }
         groups[seller_id]["cart_items"].append(item)
 
-    # РџРѕРґСЃС‡С‘С‚ РїРѕРґС‹С‚РѕРіРѕРІ РїРѕ С„РµСЂРјРµСЂР°Рј
+    # Подсчёт подытогов по фермерам
     total = 0
     for group in groups.values():
         subtotal = sum(effective_product_price(i.product) * i.quantity for i in group["cart_items"] if i.product)
@@ -163,7 +167,7 @@ def cart_list(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/add/{product_id}")
 def cart_add(product_id: int, request: Request, db: Session = Depends(get_db)):
-    """Р”РѕР±Р°РІРёС‚СЊ С‚РѕРІР°СЂ РІ РєРѕСЂР·РёРЅСѓ"""
+    """Добавить товар в корзину"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -245,7 +249,7 @@ def cart_dec_product(product_id: int, request: Request, db: Session = Depends(ge
 
 @router.post("/remove/{item_id}")
 def cart_remove(item_id: int, request: Request, db: Session = Depends(get_db)):
-    """РЈРґР°Р»РёС‚СЊ С‚РѕРІР°СЂ РёР· РєРѕСЂР·РёРЅС‹ РїРѕР»РЅРѕСЃС‚СЊСЋ"""
+    """Удалить товар из корзины полностью"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -260,7 +264,7 @@ def cart_remove(item_id: int, request: Request, db: Session = Depends(get_db)):
 
 @router.post("/inc/{item_id}")
 def cart_inc(item_id: int, request: Request, db: Session = Depends(get_db)):
-    """РЈРІРµР»РёС‡РёС‚СЊ РєРѕР»РёС‡РµСЃС‚РІРѕ С‚РѕРІР°СЂР° РІ РєРѕСЂР·РёРЅРµ РЅР° 1"""
+    """Увеличить количество товара в корзине на 1"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -298,7 +302,7 @@ def cart_inc(item_id: int, request: Request, db: Session = Depends(get_db)):
 
 @router.post("/dec/{item_id}")
 def cart_dec(item_id: int, request: Request, db: Session = Depends(get_db)):
-    """РЈРјРµРЅСЊС€РёС‚СЊ РєРѕР»РёС‡РµСЃС‚РІРѕ. Р•СЃР»Рё СЃС‚Р°Р»Рѕ 0 вЂ” СѓРґР°Р»РёС‚СЊ РёР· РєРѕСЂР·РёРЅС‹"""
+    """Уменьшить количество. Если стало 0 — удалить из корзины"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -316,7 +320,7 @@ def cart_dec(item_id: int, request: Request, db: Session = Depends(get_db)):
 
 @router.post("/clear")
 def cart_clear(request: Request, db: Session = Depends(get_db)):
-    """РћС‡РёСЃС‚РёС‚СЊ РєРѕСЂР·РёРЅСѓ РїРѕР»РЅРѕСЃС‚СЊСЋ"""
+    """Очистить корзину полностью"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:

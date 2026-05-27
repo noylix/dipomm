@@ -12,7 +12,7 @@ from base64 import b64decode
 from itsdangerous import BadSignature, TimestampSigner
 import json
 from database import engine, Base, get_db, SessionLocal
-from models import User, Product, Review, SellerReview, Coupon, Notification, Order, OrderItem, FarmCertificate, PlatformSetting
+from models import User, Product, Review, SellerReview, Coupon, OrderItem, FarmCertificate, PlatformSetting
 from auth import hash_password, get_optional_user
 from sqlalchemy import inspect, text
 from datetime import date, datetime
@@ -24,9 +24,6 @@ from marketplace_utils import effective_product_price_expr, product_price_payloa
 # Импорт роутеров
 from routes import cart, order, delivery, admin, users, seller, complaints, reviews, analytics, notifications, product, favorites, payment, search, chat, accounting, conversations
 
-
-def _is_displayable_text(value):
-    return bool(value and str(value).strip() and "?" not in str(value))
 
 # Создаем таблицы в БД
 Base.metadata.create_all(bind=engine)
@@ -93,12 +90,31 @@ def _migrate_schema():
                 ("seller_application_status", "ALTER TABLE users ADD COLUMN seller_application_status VARCHAR(50) DEFAULT 'approved'"),
                 ("seller_application_rejection_reason", "ALTER TABLE users ADD COLUMN seller_application_rejection_reason VARCHAR(2000)"),
                 ("seller_application_admin_comment", "ALTER TABLE users ADD COLUMN seller_application_admin_comment VARCHAR(2000)"),
+                ("pickup_enabled", "ALTER TABLE users ADD COLUMN pickup_enabled INTEGER DEFAULT 1"),
+                ("pickup_address", "ALTER TABLE users ADD COLUMN pickup_address VARCHAR(500)"),
+                ("pickup_comment", "ALTER TABLE users ADD COLUMN pickup_comment VARCHAR(1000)"),
+                ("farmer_delivery_enabled", "ALTER TABLE users ADD COLUMN farmer_delivery_enabled INTEGER DEFAULT 1"),
+                ("farmer_delivery_fee", "ALTER TABLE users ADD COLUMN farmer_delivery_fee NUMERIC(10, 2) DEFAULT 500"),
+                ("farmer_delivery_min_order", "ALTER TABLE users ADD COLUMN farmer_delivery_min_order NUMERIC(10, 2) DEFAULT 0"),
+                ("farmer_delivery_comment", "ALTER TABLE users ADD COLUMN farmer_delivery_comment VARCHAR(1000)"),
+                ("delivery_slots", "ALTER TABLE users ADD COLUMN delivery_slots VARCHAR(1000)"),
+                ("partner_delivery_enabled", "ALTER TABLE users ADD COLUMN partner_delivery_enabled INTEGER DEFAULT 0"),
+                ("partner_delivery_fee", "ALTER TABLE users ADD COLUMN partner_delivery_fee NUMERIC(10, 2) DEFAULT 700"),
+                ("partner_delivery_comment", "ALTER TABLE users ADD COLUMN partner_delivery_comment VARCHAR(1000)"),
             ]:
                 if col not in cols:
                     conn.execute(text(ddl))
                     cols.add(col)
             # Тестовые пользователи считаются подтверждёнными
-            conn.execute(text("UPDATE users SET email_verified = 1 WHERE email_verified IS NULL OR email_verified = 0"))
+            # Demo accounts are treated as verified; do not verify real registered users on every startup.
+            conn.execute(text(
+                "UPDATE users SET email_verified = 1 "
+                "WHERE email IN ("
+                "'admin@farm.local', 'seller@farm.local', 'user@farm.local', "
+                "'manager@farm.local', 'misha@farm.local', 'brovin@farm.local', "
+                "'buyer1@farm.local', 'buyer2@farm.local', 'buyer3@farm.local'"
+                ") AND (email_verified IS NULL OR email_verified = 0)"
+            ))
             conn.execute(text(
                 "UPDATE users SET seller_application_status = CASE "
                 "WHEN role = 'seller' AND is_approved = 1 THEN 'approved' "
@@ -106,21 +122,23 @@ def _migrate_schema():
                 "ELSE COALESCE(seller_application_status, 'approved') END "
                 "WHERE seller_application_status IS NULL OR seller_application_status = ''"
             ))
+            # Унифицируем статусы заявок фермеров: pending / approved / rejected
             conn.execute(text(
-                "UPDATE users SET seller_application_status = 'new' "
-                "WHERE role = 'seller' AND seller_application_status = 'pending'"
+                "UPDATE users SET seller_application_status = 'pending' "
+                "WHERE role = 'seller' AND COALESCE(seller_application_status, '') "
+                "NOT IN ('approved', 'rejected')"
             ))
             conn.execute(text(
-                "UPDATE users SET seller_application_status = 'new' "
-                "WHERE role = 'seller' AND is_approved = 0 "
-                "AND seller_application_status IN ('pending', 'approved')"
+                "UPDATE users SET seller_application_status = 'approved' "
+                "WHERE role = 'seller' AND is_approved = 1 "
+                "AND seller_application_status = 'pending'"
             ))
-            conn.execute(text(
-                "UPDATE users SET inn = NULL, passport_photo_url = NULL, supplier_document_url = NULL, "
-                "supplier_registration_data = NULL, supplier_bank_details = NULL "
-                "WHERE role = 'seller'"
-            ))
-
+            conn.execute(text("UPDATE users SET pickup_enabled = 1 WHERE role = 'seller' AND pickup_enabled IS NULL"))
+            conn.execute(text("UPDATE users SET farmer_delivery_enabled = 1 WHERE role = 'seller' AND farmer_delivery_enabled IS NULL"))
+            conn.execute(text("UPDATE users SET partner_delivery_enabled = 0 WHERE role = 'seller' AND partner_delivery_enabled IS NULL"))
+            conn.execute(text("UPDATE users SET farmer_delivery_fee = 500 WHERE role = 'seller' AND farmer_delivery_fee IS NULL"))
+            conn.execute(text("UPDATE users SET partner_delivery_fee = 700 WHERE role = 'seller' AND partner_delivery_fee IS NULL"))
+            conn.execute(text("UPDATE users SET delivery_slots = '10-14,14-18,18-22' WHERE role = 'seller' AND (delivery_slots IS NULL OR delivery_slots = '')"))
     # Миграция transactions
     if "transactions" in table_names:
         cols = {c["name"] for c in inspector.get_columns("transactions")}
@@ -174,13 +192,19 @@ def _migrate_schema():
         with engine.begin() as conn:
             for col, ddl in [
                 ("provider", "ALTER TABLE deliveries ADD COLUMN provider VARCHAR(100)"),
+                ("provider_name", "ALTER TABLE deliveries ADD COLUMN provider_name VARCHAR(100)"),
                 ("external_id", "ALTER TABLE deliveries ADD COLUMN external_id VARCHAR(100)"),
                 ("track_number", "ALTER TABLE deliveries ADD COLUMN track_number VARCHAR(100)"),
                 ("tracking_url", "ALTER TABLE deliveries ADD COLUMN tracking_url VARCHAR(500)"),
                 ("status", "ALTER TABLE deliveries ADD COLUMN status VARCHAR(50) DEFAULT 'created'"),
+                ("delivery_slot", "ALTER TABLE deliveries ADD COLUMN delivery_slot VARCHAR(100)"),
+                ("comment", "ALTER TABLE deliveries ADD COLUMN comment VARCHAR(2000)"),
+                ("delivery_fee", "ALTER TABLE deliveries ADD COLUMN delivery_fee NUMERIC(10,2) DEFAULT 0"),
             ]:
                 if col not in cols:
                     conn.execute(text(ddl))
+                    cols.add(col)
+            conn.execute(text("UPDATE deliveries SET delivery_fee = 0 WHERE delivery_fee IS NULL"))
 
     # Order checkout fields
     if "orders" in table_names:
@@ -195,6 +219,9 @@ def _migrate_schema():
                 ("delivery_slot", "ALTER TABLE orders ADD COLUMN delivery_slot VARCHAR(100)"),
                 ("customer_comment", "ALTER TABLE orders ADD COLUMN customer_comment VARCHAR(2000)"),
                 ("selected_payment_method", "ALTER TABLE orders ADD COLUMN selected_payment_method VARCHAR(50)"),
+                ("payment_id", "ALTER TABLE orders ADD COLUMN payment_id VARCHAR(255)"),
+                ("paid_at", "ALTER TABLE orders ADD COLUMN paid_at DATETIME"),
+                ("payment_amount", "ALTER TABLE orders ADD COLUMN payment_amount NUMERIC(10,2)"),
                 ("seller_cancel_reason", "ALTER TABLE orders ADD COLUMN seller_cancel_reason VARCHAR(2000)"),
                 ("delivery_fee", "ALTER TABLE orders ADD COLUMN delivery_fee NUMERIC(10,2) DEFAULT 0"),
                 ("payout_status", "ALTER TABLE orders ADD COLUMN payout_status VARCHAR(50) DEFAULT 'pending'"),
@@ -204,6 +231,7 @@ def _migrate_schema():
                     conn.execute(text(ddl))
             conn.execute(text("UPDATE orders SET order_number = 'FM-' || strftime('%Y%m%d', COALESCE(created_at, 'now')) || '-' || printf('%05d', id) WHERE order_number IS NULL OR order_number = ''"))
             conn.execute(text("UPDATE orders SET payout_status = 'pending' WHERE payout_status IS NULL OR payout_status = ''"))
+            conn.execute(text("UPDATE orders SET status = 'awaiting_payment' WHERE status = 'created' AND COALESCE(payment_status, 'pending') = 'pending'"))
 
     if "complaints" in table_names:
         cols = {c["name"] for c in inspector.get_columns("complaints")}
@@ -220,25 +248,23 @@ def _migrate_schema():
                 conn.execute(text("ALTER TABLE complaints ADD COLUMN admin_response VARCHAR(2000)"))
             if "updated_at" not in cols:
                 conn.execute(text("ALTER TABLE complaints ADD COLUMN updated_at DATETIME"))
-
-    if "users" in table_names:
-        inspector = inspect(engine)
-        cols = {c["name"] for c in inspector.get_columns("users")}
-        with engine.begin() as conn:
-            for col, ddl in [
-                ("supplier_registration_data", "ALTER TABLE users ADD COLUMN supplier_registration_data VARCHAR(1000)"),
-                ("supplier_document_url", "ALTER TABLE users ADD COLUMN supplier_document_url VARCHAR(500)"),
-                ("supplier_bank_details", "ALTER TABLE users ADD COLUMN supplier_bank_details VARCHAR(1000)"),
-                ("product_categories", "ALTER TABLE users ADD COLUMN product_categories VARCHAR(1000)"),
-                ("seller_application_admin_comment", "ALTER TABLE users ADD COLUMN seller_application_admin_comment VARCHAR(2000)"),
-            ]:
-                if col not in cols:
-                    conn.execute(text(ddl))
-                    cols.add(col)
+            # Унифицируем статусы жалоб: new / in_progress / resolved / rejected
+            # (sent_to_accountant остаётся системным для передачи бухгалтеру)
             conn.execute(text(
-                "UPDATE users SET inn = NULL, passport_photo_url = NULL, supplier_document_url = NULL, "
-                "supplier_registration_data = NULL, supplier_bank_details = NULL "
-                "WHERE role = 'seller'"
+                "UPDATE complaints SET status = 'in_progress' "
+                "WHERE status IN ('processing', 'waiting_farmer')"
+            ))
+            conn.execute(text(
+                "UPDATE complaints SET status = 'resolved' WHERE status = 'closed'"
+            ))
+            # type — легаси-поле, дублирует category. Заполняем category из type, где пусто.
+            conn.execute(text(
+                "UPDATE complaints SET category = type "
+                "WHERE (category IS NULL OR category = '') AND type IS NOT NULL AND type != ''"
+            ))
+            conn.execute(text(
+                "UPDATE complaints SET category = 'other' "
+                "WHERE category IS NULL OR category = ''"
             ))
 
 _migrate_schema()
@@ -334,6 +360,7 @@ async def role_gate(request: Request, call_next):
             "/seller/",
             "/reviews/admin",
             "/complaints/admin",
+            "/complaints/status/",
             "/notifications/admin",
             "/admin/analytics/",
             "/admin/moderation",
@@ -346,6 +373,7 @@ async def role_gate(request: Request, call_next):
             "/seller/",
             "/reviews/admin",
             "/complaints/admin",
+            "/complaints/status/",
             "/admin/analytics/",
             "/delivery/track/",
             "/logout",
@@ -392,7 +420,6 @@ _MODEL_RELATIONS = {
     # Keep this acyclic for JSON export to React.
     "Conversation": ("buyer", "farmer", "admin", "accountant", "order", "product", "complaint"),
     "Message": ("sender",),
-    "ChatMessage": ("author", "recipient"),
 }
 
 
@@ -435,7 +462,7 @@ def _json_safe(value, depth=0, cache=None):
             if column.name in skip_columns:
                 continue
             data[column.name] = _json_safe(getattr(value, column.name), depth + 1, cache)
-        for extra in ("_seller_rating", "_sold_count", "_review_count"):
+        for extra in ("_seller_rating", "_seller_review_count", "_product_rating", "_product_review_count", "_sold_count", "_review_count"):
             if hasattr(value, extra):
                 data[extra[1:]] = _json_safe(getattr(value, extra), depth + 1, cache)
         if value.__class__.__name__ == "Product":
@@ -551,19 +578,45 @@ def init_test_data():
                 db.refresh(seller_obj)
             seller_id = seller_obj.id
             demo_products = [
-                Product(name="Яблоки сезонные", price=120.0, discount_price=99.0, owner_id=seller_id, category="Фрукты", variety="Гала", weight_per_unit="1 кг", expiration_days=30, has_certificate=1, region="Краснодарский край", stock=50),
-                Product(name="Картофель молодой", price=45.0, discount_price=39.0, owner_id=seller_id, category="Овощи", variety="Невский", weight_per_unit="5 кг", expiration_days=90, has_certificate=0, region="Ленинградская область", stock=200),
-                Product(name="Молоко фермерское", price=85.0, discount_price=75.0, owner_id=seller_id, category="Молоко", variety="Цельное", weight_per_unit="1 л", expiration_days=7, has_certificate=1, region="Московская область", stock=30),
-                Product(name="Яйца домашние", price=90.0, discount_price=79.0, owner_id=seller_id, category="Яйца", variety="Куриные", weight_per_unit="10 шт", expiration_days=21, has_certificate=1, region="Тульская область", stock=100),
-                Product(name="Мед натуральный", price=450.0, owner_id=seller_id, category="Мёд", variety="Липовый", weight_per_unit="0.5 л", expiration_days=730, has_certificate=1, region="Алтайский край", stock=20),
-                Product(name="Огурцы свежие", price=70.0, owner_id=seller_id, category="Овощи", variety="Кураж", weight_per_unit="1 кг", expiration_days=14, has_certificate=0, region="Краснодарский край", stock=80),
+                Product(name="Яблоки сезонные", price=120.0, discount_price=99.0, owner_id=seller_id, category="Фрукты", variety="Гала", weight_per_unit="1 кг", expiration_days=30, has_certificate=1, region="Краснодарский край", stock=50, image_url="/static/product-images/fruits-berries.jpg"),
+                Product(name="Картофель молодой", price=45.0, discount_price=39.0, owner_id=seller_id, category="Овощи", variety="Невский", weight_per_unit="5 кг", expiration_days=90, has_certificate=0, region="Ленинградская область", stock=200, image_url="/static/product-images/green-produce.jpg"),
+                Product(name="Молоко фермерское", price=85.0, discount_price=75.0, owner_id=seller_id, category="Молоко", variety="Цельное", weight_per_unit="1 л", expiration_days=7, has_certificate=1, region="Московская область", stock=30, image_url="/static/product-images/dairy-eggs.jpg"),
+                Product(name="Яйца домашние", price=90.0, discount_price=79.0, owner_id=seller_id, category="Яйца", variety="Куриные", weight_per_unit="10 шт", expiration_days=21, has_certificate=1, region="Тульская область", stock=100, image_url="/static/product-images/dairy-eggs.jpg"),
+                Product(name="Мед натуральный", price=450.0, owner_id=seller_id, category="Мёд", variety="Липовый", weight_per_unit="0.5 л", expiration_days=730, has_certificate=1, region="Алтайский край", stock=20, image_url="/static/product-images/basket-hits.jpg"),
+                Product(name="Огурцы свежие", price=70.0, owner_id=seller_id, category="Овощи", variety="Кураж", weight_per_unit="1 кг", expiration_days=14, has_certificate=0, region="Краснодарский край", stock=80, image_url="/static/product-images/vegetables-herbs.jpg"),
+                Product(name="Томаты розовые", price=140.0, discount_price=119.0, owner_id=seller_id, category="Овощи", variety="Розовые", weight_per_unit="1 кг", expiration_days=10, has_certificate=0, region="Краснодарский край", stock=65, image_url="/static/product-images/vegetables-herbs.jpg"),
+                Product(name="Сыр фермерский", price=520.0, owner_id=seller_id, category="Сыр", variety="Полутвердый", weight_per_unit="300 г", expiration_days=20, has_certificate=1, region="Московская область", stock=18, image_url="/static/product-images/dairy-eggs.jpg"),
             ]
-            demo_units = ["\u043a\u0433", "\u043a\u0433", "\u043b", "\u0448\u0442", "\u0431\u0430\u043d\u043a\u0430", "\u043a\u0433"]
+            demo_units = ["\u043a\u0433", "\u043a\u0433", "\u043b", "\u0448\u0442", "\u0431\u0430\u043d\u043a\u0430", "\u043a\u0433", "\u043a\u0433", "\u0448\u0442"]
             for index, product in enumerate(demo_products):
                 product.status = "approved"
                 product.unit = demo_units[index] if index < len(demo_units) else "\u0448\u0442"
                 product.low_stock_threshold = 5
                 db.add(product)
+            db.commit()
+
+        seller_obj = db.query(User).filter(User.email == "seller@farm.local", User.role == "seller").first()
+        if seller_obj:
+            demo_product_images = {
+                "Яблоки сезонные": "/static/product-images/fruits-berries.jpg",
+                "Картофель молодой": "/static/product-images/green-produce.jpg",
+                "Молоко фермерское": "/static/product-images/dairy-eggs.jpg",
+                "Яйца домашние": "/static/product-images/dairy-eggs.jpg",
+                "Мед натуральный": "/static/product-images/basket-hits.jpg",
+                "Огурцы свежие": "/static/product-images/vegetables-herbs.jpg",
+            }
+            for name, image_url in demo_product_images.items():
+                product = db.query(Product).filter(Product.name == name).first()
+                if product and not product.image_url:
+                    product.image_url = image_url
+
+            extra_demo_products = [
+                Product(name="Томаты розовые", price=140.0, discount_price=119.0, owner_id=seller_obj.id, category="Овощи", variety="Розовые", weight_per_unit="1 кг", expiration_days=10, has_certificate=0, region="Краснодарский край", stock=65, unit="кг", low_stock_threshold=5, status="approved", image_url="/static/product-images/vegetables-herbs.jpg"),
+                Product(name="Сыр фермерский", price=520.0, owner_id=seller_obj.id, category="Сыр", variety="Полутвердый", weight_per_unit="300 г", expiration_days=20, has_certificate=1, region="Московская область", stock=18, unit="шт", low_stock_threshold=5, status="approved", image_url="/static/product-images/dairy-eggs.jpg"),
+            ]
+            for product in extra_demo_products:
+                if not db.query(Product).filter(Product.name == product.name).first():
+                    db.add(product)
             db.commit()
 
         seller_obj = db.query(User).filter(User.email == "seller@farm.local", User.role == "seller").first()
@@ -635,6 +688,39 @@ def init_test_data():
                 )
             db.add_all(demo_reviews)
             db.commit()
+
+        if not db.query(SellerReview).first():
+            seller_obj = db.query(User).filter(User.email == "seller@farm.local", User.role == "seller").first()
+            demo_review_users = [
+                ("buyer1@farm.local", "buyer123"),
+                ("buyer2@farm.local", "buyer456"),
+                ("buyer3@farm.local", "buyer789"),
+            ]
+            seller_reviews = []
+            if seller_obj:
+                for email, password in demo_review_users:
+                    user_obj = db.query(User).filter(User.email == email).first()
+                    if not user_obj:
+                        user_obj = User(
+                            email=email,
+                            password_hash=hash_password(password),
+                            role="user",
+                            is_approved=1,
+                            email_verified=1,
+                        )
+                        db.add(user_obj)
+                        db.flush()
+                    seller_reviews.append(
+                        SellerReview(
+                            user_id=user_obj.id,
+                            seller_id=seller_obj.id,
+                            rating=5 if email != "buyer2@farm.local" else 4,
+                            text="Надежный продавец: быстро собирает заказ и аккуратно упаковывает продукты.",
+                            status="approved",
+                        )
+                    )
+            db.add_all(seller_reviews)
+            db.commit()
     finally:
         db.close()
 
@@ -642,6 +728,150 @@ def init_test_data():
 # Заполняем тестовые данные
 if AUTO_SEED_DEMO_DATA:
     init_test_data()
+
+
+HOME_SECTION_LIMIT = 8
+
+
+def _seller_rating_subquery(db: Session):
+    return (
+        db.query(
+            SellerReview.seller_id.label("seller_id"),
+            func.avg(SellerReview.rating).label("seller_rating"),
+            func.count(SellerReview.id).label("seller_review_count"),
+        )
+        .filter(SellerReview.status == "approved")
+        .group_by(SellerReview.seller_id)
+        .subquery()
+    )
+
+
+def _product_rating_subquery(db: Session):
+    return (
+        db.query(
+            Review.product_id.label("product_id"),
+            func.avg(Review.rating).label("product_rating"),
+            func.count(Review.id).label("product_review_count"),
+        )
+        .filter(Review.status == "approved")
+        .group_by(Review.product_id)
+        .subquery()
+    )
+
+
+def _product_popularity_subquery(db: Session):
+    return (
+        db.query(
+            OrderItem.product_id.label("product_id"),
+            func.coalesce(func.sum(OrderItem.quantity), 0).label("sold_count")
+        )
+        .group_by(OrderItem.product_id)
+        .subquery()
+    )
+
+
+def _home_products_from_rows(rows):
+    products = []
+    for row in rows:
+        product = row[0]
+        product._seller_rating = round(row[1], 1) if row[1] else None
+        product._seller_review_count = int(row[2] or 0)
+        product._product_rating = round(row[3], 1) if row[3] else None
+        product._product_review_count = int(row[4] or 0)
+        product._sold_count = int(row[5] or 0)
+        products.append(product)
+    return products
+
+
+def _home_product_sections(db: Session) -> list[dict]:
+    seller_rating_subq = _seller_rating_subquery(db)
+    product_rating_subq = _product_rating_subquery(db)
+    popularity_subq = _product_popularity_subquery(db)
+    base_query = (
+        db.query(
+            Product,
+            seller_rating_subq.c.seller_rating,
+            seller_rating_subq.c.seller_review_count,
+            product_rating_subq.c.product_rating,
+            product_rating_subq.c.product_review_count,
+            popularity_subq.c.sold_count,
+        )
+        .outerjoin(seller_rating_subq, Product.owner_id == seller_rating_subq.c.seller_id)
+        .outerjoin(product_rating_subq, Product.id == product_rating_subq.c.product_id)
+        .outerjoin(popularity_subq, Product.id == popularity_subq.c.product_id)
+        .join(User, Product.owner_id == User.id)
+        .filter(
+            Product.status == "approved",
+            or_(User.is_approved == 1, Product.owner_id == None)
+        )
+    )
+
+    section_specs = [
+        {
+            "id": "new",
+            "title": "Новинки",
+            "text": "Свежие позиции, которые недавно появились на витрине.",
+            "href": "/catalog?category=new",
+            "icon": "sparkles",
+            "products": _home_products_from_rows(
+                base_query
+                .order_by(Product.id.desc())
+                .limit(HOME_SECTION_LIMIT)
+                .all()
+            ),
+        },
+        {
+            "id": "sale",
+            "title": "Зеленые ценники",
+            "text": "Товары со скидкой, где новая цена ниже обычной.",
+            "href": "/catalog?category=sale",
+            "icon": "badge-percent",
+            "products": _home_products_from_rows(
+                base_query
+                .filter(
+                    Product.discount_price.isnot(None),
+                    Product.discount_price > 0,
+                    Product.discount_price < Product.price,
+                )
+                .order_by((Product.price - Product.discount_price).desc(), Product.id.desc())
+                .limit(HOME_SECTION_LIMIT)
+                .all()
+            ),
+        },
+        {
+            "id": "fruits",
+            "title": "Фрукты и ягоды",
+            "text": "Сезонная полка для сладкого, свежего и к чаю.",
+            "href": "/catalog?category=фрукты",
+            "icon": "apple",
+            "products": _home_products_from_rows(
+                base_query
+                .filter(Product.category.in_(("Фрукты", "Ягоды")))
+                .order_by(Product.id.desc())
+                .limit(HOME_SECTION_LIMIT)
+                .all()
+            ),
+        },
+        {
+            "id": "popular",
+            "title": "Хиты",
+            "text": "То, что чаще выбирают покупатели и выше оценивают.",
+            "href": "/catalog?category=popular",
+            "icon": "flame",
+            "products": _home_products_from_rows(
+                base_query
+                .order_by(
+                    func.coalesce(popularity_subq.c.sold_count, 0).desc(),
+                    func.coalesce(product_rating_subq.c.product_rating, 0).desc(),
+                    func.coalesce(seller_rating_subq.c.seller_rating, 0).desc(),
+                    Product.id.desc(),
+                )
+                .limit(HOME_SECTION_LIMIT)
+                .all()
+            ),
+        },
+    ]
+    return [section for section in section_specs if section["products"]]
 
 
 @app.get("/")
@@ -654,19 +884,21 @@ def index(
     if (q or "").strip():
         return RedirectResponse(url=f"/search?q={quote_plus((q or '').strip())}", status_code=303)
 
-    # Считаем рейтинг фермеров: средняя оценка по одобренным отзывам
-    subq = (
+    seller_rating_subq = _seller_rating_subquery(db)
+    product_rating_subq = _product_rating_subquery(db)
+    popularity_subq = _product_popularity_subquery(db)
+    query = (
         db.query(
-            Review.user_id.label("seller_id"),
-            func.avg(Review.rating).label("avg_rating")
+            Product,
+            seller_rating_subq.c.seller_rating,
+            seller_rating_subq.c.seller_review_count,
+            product_rating_subq.c.product_rating,
+            product_rating_subq.c.product_review_count,
+            popularity_subq.c.sold_count,
         )
-        .filter(Review.status == "approved")
-        .group_by(Review.user_id)
-        .subquery()
-    )
-
-    query = db.query(Product, subq.c.avg_rating).outerjoin(
-        subq, Product.owner_id == subq.c.seller_id
+        .outerjoin(seller_rating_subq, Product.owner_id == seller_rating_subq.c.seller_id)
+        .outerjoin(product_rating_subq, Product.id == product_rating_subq.c.product_id)
+        .outerjoin(popularity_subq, Product.id == popularity_subq.c.product_id)
     )
 
     # Только одобренные товары и от подтверждённых фермеров
@@ -675,20 +907,28 @@ def index(
         or_(User.is_approved == 1, Product.owner_id == None)
     )
 
-    # Сортировка: сначала по рейтингу фермера (NULL = 0), потом по id
-    query = query.order_by(func.coalesce(subq.c.avg_rating, 0).desc(), Product.id)
+    query = query.order_by(
+        func.coalesce(product_rating_subq.c.product_rating, 0).desc(),
+        func.coalesce(seller_rating_subq.c.seller_rating, 0).desc(),
+        Product.id.desc(),
+    )
     rows = query.all()
 
     products = []
     for row in rows:
         product = row[0]
         product._seller_rating = round(row[1], 1) if row[1] else None
+        product._seller_review_count = int(row[2] or 0)
+        product._product_rating = round(row[3], 1) if row[3] else None
+        product._product_review_count = int(row[4] or 0)
+        product._sold_count = int(row[5] or 0)
         products.append(product)
 
     user = get_optional_user(request, db)
     return templates.TemplateResponse(
         request, "index", {
             "products": products, "user": user,
+            "home_sections": _home_product_sections(db),
             "q": q,
         }
     )
@@ -799,30 +1039,22 @@ def catalog_page(
     category = (category or "").strip().lower()
     special_category = category if category in {"new", "popular", "sale"} else ""
 
-    # Считаем рейтинг фермеров
-    rating_subq = (
-        db.query(
-            Review.user_id.label("seller_id"),
-            func.avg(Review.rating).label("avg_rating")
-        )
-        .filter(Review.status == "approved")
-        .group_by(Review.user_id)
-        .subquery()
-    )
+    seller_rating_subq = _seller_rating_subquery(db)
+    product_rating_subq = _product_rating_subquery(db)
+    popularity_subq = _product_popularity_subquery(db)
 
-    popularity_subq = (
+    query = (
         db.query(
-            OrderItem.product_id.label("product_id"),
-            func.coalesce(func.sum(OrderItem.quantity), 0).label("sold_count")
+            Product,
+            seller_rating_subq.c.seller_rating,
+            seller_rating_subq.c.seller_review_count,
+            product_rating_subq.c.product_rating,
+            product_rating_subq.c.product_review_count,
+            popularity_subq.c.sold_count,
         )
-        .group_by(OrderItem.product_id)
-        .subquery()
-    )
-
-    query = db.query(Product, rating_subq.c.avg_rating, popularity_subq.c.sold_count).outerjoin(
-        rating_subq, Product.owner_id == rating_subq.c.seller_id
-    ).outerjoin(
-        popularity_subq, Product.id == popularity_subq.c.product_id
+        .outerjoin(seller_rating_subq, Product.owner_id == seller_rating_subq.c.seller_id)
+        .outerjoin(product_rating_subq, Product.id == product_rating_subq.c.product_id)
+        .outerjoin(popularity_subq, Product.id == popularity_subq.c.product_id)
     )
 
     # Только одобренные товары и от подтверждённых фермеров
@@ -869,7 +1101,11 @@ def catalog_page(
     elif sort == "popular":
         query = query.order_by(func.coalesce(popularity_subq.c.sold_count, 0).desc(), Product.id.desc())
     else:
-        query = query.order_by(func.coalesce(rating_subq.c.avg_rating, 0).desc(), Product.id.desc())
+        query = query.order_by(
+            func.coalesce(product_rating_subq.c.product_rating, 0).desc(),
+            func.coalesce(seller_rating_subq.c.seller_rating, 0).desc(),
+            Product.id.desc(),
+        )
 
     per_page = 24
     page = max(page, 1)
@@ -883,7 +1119,10 @@ def catalog_page(
     for row in rows:
         product = row[0]
         product._seller_rating = round(row[1], 1) if row[1] else None
-        product._sold_count = int(row[2] or 0)
+        product._seller_review_count = int(row[2] or 0)
+        product._product_rating = round(row[3], 1) if row[3] else None
+        product._product_review_count = int(row[4] or 0)
+        product._sold_count = int(row[5] or 0)
         products.append(product)
 
     user = get_optional_user(request, db)

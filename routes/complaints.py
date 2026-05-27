@@ -1,13 +1,13 @@
 ﻿# routes/complaints.py
-# Р–Р°Р»РѕР±С‹ Рё СЃРїРѕСЂС‹ (РњРѕРґСѓР»СЊ РєРѕРјРјСѓРЅРёРєР°С†РёРё Рё СѓРїСЂР°РІР»РµРЅРёСЏ СЃРѕРѕР±С‰РµСЃС‚РІРѕРј вЂ” Р–СѓРєРѕРІ РњР°РєСЃРёРј)
+# Жалобы и споры (Модуль коммуникации и управления сообществом — Жуков Максим)
 
 from fastapi import APIRouter, Depends, Request, Form, File, UploadFile
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Complaint, User, Product, Order, Conversation, Message, Notification
-from auth import get_optional_user, check_logged_in, check_role
+from models import Complaint, User, Product, Order, Message, Notification
+from auth import get_optional_user, check_role
 from routes.conversations import upsert_complaint_conversation, upsert_finance_conversation, _save_attachment
 
 router = APIRouter(prefix="/complaints", tags=["complaints"])
@@ -24,6 +24,25 @@ COMPLAINT_CATEGORIES = {
 }
 
 
+VALID_COMPLAINT_STATUSES = {
+    "new",
+    "processing",
+    "in_progress",
+    "resolved",
+    "rejected",
+    # Системный статус: жалоба передана бухгалтеру (см. /transfer)
+    "sent_to_accountant",
+}
+
+
+def _admin_complaint_redirect(request: Request, complaint_id: int) -> str:
+    referrer = request.headers.get("referer", "")
+    if f"/complaints/admin/{complaint_id}" in referrer:
+        return f"/complaints/admin/{complaint_id}"
+    if "/complaints/admin" in referrer:
+        return "/complaints/admin"
+    return f"/complaints/admin/{complaint_id}"
+
 
 @router.get("/create", response_class=HTMLResponse)
 def complaint_create_page(
@@ -32,7 +51,7 @@ def complaint_create_page(
     product_id: int = None,
     db: Session = Depends(get_db)
 ):
-    """РЎС‚СЂР°РЅРёС†Р° СЃРѕР·РґР°РЅРёСЏ Р¶Р°Р»РѕР±С‹"""
+    """Страница создания жалобы"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -73,7 +92,7 @@ def create_complaint(
     attachment: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
-    """РЎРѕР·РґР°С‚СЊ Р¶Р°Р»РѕР±Сѓ (РЅР° С„РµСЂРјРµСЂР°/С‚РѕРІР°СЂ/РґРѕСЃС‚Р°РІРєСѓ)"""
+    """Создать жалобу (на фермера/товар/доставку)"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -82,7 +101,7 @@ def create_complaint(
     category = (category or type or "").strip() or "other"
     text = (text or "").strip()
     if category not in COMPLAINT_CATEGORIES or len(text) < 10:
-        request.session["complaint_error"] = "Р—Р°РїРѕР»РЅРёС‚Рµ С‚РёРї Рё С‚РµРєСЃС‚ Р¶Р°Р»РѕР±С‹"
+        request.session["complaint_error"] = "Заполните тип и текст жалобы"
         return RedirectResponse("/complaints/create", status_code=303)
     if target_user_id and not db.query(User).filter(User.id == target_user_id).first():
         return RedirectResponse("/complaints/create", status_code=303)
@@ -109,13 +128,13 @@ def create_complaint(
     db.refresh(complaint)
     upsert_complaint_conversation(db, complaint)
 
-    request.session["complaint_success"] = "Р–Р°Р»РѕР±Р° РѕС‚РїСЂР°РІР»РµРЅР° РЅР° СЂР°СЃСЃРјРѕС‚СЂРµРЅРёРµ"
+    request.session["complaint_success"] = "Жалоба отправлена на рассмотрение"
     return RedirectResponse("/complaints/my", status_code=303)
 
 
 @router.get("/my", response_class=HTMLResponse)
 def my_complaints(request: Request, db: Session = Depends(get_db)):
-    """РњРѕРё Р¶Р°Р»РѕР±С‹"""
+    """Мои жалобы"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -125,7 +144,7 @@ def my_complaints(request: Request, db: Session = Depends(get_db)):
         Complaint.user_id == user.id
     ).order_by(Complaint.created_at.desc()).limit(50).all()
 
-    # РџРѕРґРіСЂСѓР¶Р°РµРј СЃРІСЏР·Р°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ
+    # Подгружаем связанные данные
     complaint_list = []
     for c in complaints:
         complaint_data = {
@@ -150,15 +169,15 @@ def my_complaints(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/admin", response_class=HTMLResponse)
 def complaints_admin(request: Request, db: Session = Depends(get_db)):
-    """РњРѕРґРµСЂР°С†РёСЏ Р¶Р°Р»РѕР± вЂ” С‚РѕР»СЊРєРѕ manager Рё admin"""
+    """Модерация жалоб — только manager и admin"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
     complaints = db.query(Complaint).order_by(Complaint.created_at.desc()).limit(100).all()
 
-    # РџРѕРґРіСЂСѓР¶Р°РµРј СЃРІСЏР·Р°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ
+    # Подгружаем связанные данные
     complaint_list = []
     for c in complaints:
         complaint_data = {
@@ -202,6 +221,9 @@ def complaint_my_detail(complaint_id: int, request: Request, db: Session = Depen
         "user": user,
         "complaint": complaint,
         "order": order,
+        "author": db.query(User).filter(User.id == complaint.user_id).first() if complaint.user_id else None,
+        "target_user": db.query(User).filter(User.id == complaint.target_user_id).first() if complaint.target_user_id else None,
+        "target_product": db.query(Product).filter(Product.id == complaint.target_product_id).first() if complaint.target_product_id else None,
         "conversation": conversation,
         "messages": messages,
         "can_reply": conversation.buyer_id == user.id,
@@ -213,7 +235,7 @@ def complaint_my_detail(complaint_id: int, request: Request, db: Session = Depen
 @router.get("/admin/{complaint_id}", response_class=HTMLResponse)
 def complaint_admin_detail(complaint_id: int, request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
@@ -228,6 +250,9 @@ def complaint_admin_detail(complaint_id: int, request: Request, db: Session = De
         "user": user,
         "complaint": complaint,
         "order": order,
+        "author": db.query(User).filter(User.id == complaint.user_id).first() if complaint.user_id else None,
+        "target_user": db.query(User).filter(User.id == complaint.target_user_id).first() if complaint.target_user_id else None,
+        "target_product": db.query(Product).filter(Product.id == complaint.target_product_id).first() if complaint.target_product_id else None,
         "conversation": conversation,
         "messages": messages,
         "can_reply": True,
@@ -236,6 +261,7 @@ def complaint_admin_detail(complaint_id: int, request: Request, db: Session = De
     })
 
 
+@router.post("/admin/{complaint_id}/status")
 @router.post("/status/{complaint_id}")
 def update_status(
     complaint_id: int,
@@ -244,36 +270,52 @@ def update_status(
     response_text: str = Form(""),
     db: Session = Depends(get_db)
 ):
-    """РР·РјРµРЅРёС‚СЊ СЃС‚Р°С‚СѓСЃ Р¶Р°Р»РѕР±С‹"""
+    """Изменить статус жалобы"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
-    if complaint and status in ("new", "processing", "resolved", "rejected", "in_progress", "waiting_farmer", "sent_to_accountant", "closed"):
-        previous_response = (complaint.admin_response or "").strip()
-        complaint.status = status
-        response_text = (response_text or "").strip()
-        if response_text:
-            complaint.admin_response = response_text[:2000]
-            if response_text != previous_response:
-                db.add(Notification(
-                    user_id=complaint.user_id,
-                    type="system",
-                    subject=f"Ответ на жалобу #{complaint.id}",
-                    body=f"Поддержка оставила ответ по обращению #{complaint.id}: {response_text[:500]}"
-                ))
-        complaint.assigned_to_role = "accountant" if status == "sent_to_accountant" else complaint.assigned_to_role
-        upsert_complaint_conversation(db, complaint)
-        db.commit()
+    if not complaint:
+        request.session["complaint_error"] = "Жалоба не найдена."
+        return RedirectResponse("/complaints/admin", status_code=303)
 
-    return RedirectResponse("/complaints/admin", status_code=303)
+    if status not in VALID_COMPLAINT_STATUSES:
+        request.session["complaint_error"] = "Недопустимый статус жалобы."
+        return RedirectResponse(_admin_complaint_redirect(request, complaint_id), status_code=303)
+
+    response_text = (response_text or "").strip()
+
+    complaint.status = status
+    if status == "sent_to_accountant":
+        complaint.assigned_to_role = "accountant"
+
+    conversation = upsert_complaint_conversation(db, complaint)
+    if response_text:
+        complaint.admin_response = response_text[:2000]
+        db.add(Notification(
+            user_id=complaint.user_id,
+            type="system",
+            subject=f"Ответ на жалобу #{complaint.id}",
+            body=f"Поддержка оставила ответ по обращению #{complaint.id}: {response_text[:500]}"
+        ))
+        db.add(Message(
+            conversation_id=conversation.id,
+            sender_id=user.id,
+            sender_role=user.role,
+            text=response_text[:2000],
+            is_read=0,
+        ))
+
+    db.commit()
+    request.session["complaint_success"] = "Жалоба обновлена."
+    return RedirectResponse(_admin_complaint_redirect(request, complaint.id), status_code=303)
 
 
 @router.post("/{complaint_id}/delete")
 def delete_complaint(complaint_id: int, request: Request, db: Session = Depends(get_db)):
-    """РЈРґР°Р»РёС‚СЊ СЃРІРѕСЋ Р¶Р°Р»РѕР±Сѓ (С‚РѕР»СЊРєРѕ РµСЃР»Рё new)"""
+    """Удалить свою жалобу (только если new)"""
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -294,7 +336,7 @@ def delete_complaint(complaint_id: int, request: Request, db: Session = Depends(
 @router.post("/admin/{complaint_id}/transfer")
 def transfer_complaint_to_accountant(complaint_id: int, request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
@@ -304,5 +346,5 @@ def transfer_complaint_to_accountant(complaint_id: int, request: Request, db: Se
         complaint.assigned_to_role = "accountant"
         db.commit()
         upsert_finance_conversation(db, complaint)
-        request.session["complaint_success"] = "РћР±СЂР°С‰РµРЅРёРµ РїРµСЂРµРґР°РЅРѕ Р±СѓС…РіР°Р»С‚РµСЂСѓ"
+        request.session["complaint_success"] = "Обращение передано бухгалтеру"
     return RedirectResponse("/complaints/admin", status_code=303)

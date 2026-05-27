@@ -179,6 +179,7 @@ def search_page(
     page: int = 1,
 ):
     user = get_optional_user(request, db)
+    page = max(page, 1)
 
     rating_subq = (
         db.query(
@@ -223,19 +224,8 @@ def search_page(
         terms = _name_search_terms(query_text)
         result = []
         seen_ids = set()
-        compact_query = compact_text(query_text)
-        exact_product_ids = {
-            product.id
-            for product, _seller, _avg_rating, _review_count, _sold_count in rows
-            if compact_query
-            and (
-                compact_text(product.name or "") == compact_query
-            )
-        }
         for product, seller, avg_rating, review_count, sold_count in rows:
             if product.id in seen_ids:
-                continue
-            if exact_product_ids and product.id not in exact_product_ids:
                 continue
             seen_ids.add(product.id)
             score = _relevance_score(product, seller, query_text, terms, avg_rating, sold_count)
@@ -258,6 +248,9 @@ def search_page(
 
     per_page = 20
     total = len(scored_rows)
+    total_pages = (total + per_page - 1) // per_page
+    if total_pages and page > total_pages:
+        page = total_pages
     rows = scored_rows[(page - 1) * per_page: page * per_page]
 
     products = []
@@ -267,8 +260,6 @@ def search_page(
         product._sold_count = int(sold_count or 0)
         product._search_score = round(score, 2)
         products.append(product)
-
-    total_pages = (total + per_page - 1) // per_page
 
     search_hint = None
     if correction_used and corrected_query and corrected_query != " ".join(_tokenize(applied_query)):

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from auth import check_role, get_optional_user
 from database import get_db
 from marketplace_utils import product_stock_quantity
-from models import Complaint, Conversation, Message, Order, OrderItem, Product, Transaction, User, Wallet
+from models import Complaint, Message, Order, OrderItem, Product, Transaction, User, Wallet
 from order_statuses import ORDER_STATUS_LABELS, normalize_order_status
 from routes.conversations import upsert_finance_conversation
 
@@ -214,7 +214,7 @@ def initiate_refund(
         return RedirectResponse("/accounting/", status_code=303)
 
     previous_status = normalize_order_status(order.status)
-    if previous_status in ("canceled", "refunded"):
+    if previous_status in ("cancelled", "refunded"):
         request.session["accounting_error"] = "\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u043f\u043e \u044d\u0442\u043e\u043c\u0443 \u0437\u0430\u043a\u0430\u0437\u0443 \u0443\u0436\u0435 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0430\u043d."
         return RedirectResponse("/accounting/", status_code=303)
 
@@ -241,7 +241,7 @@ def initiate_refund(
         payment_method="wallet",
         description=reason[:500],
     ))
-    if previous_status not in ("canceled", "refunded"):
+    if previous_status not in ("cancelled", "refunded"):
         for item in order.items or []:
             if item.product and item.quantity:
                 item.product.stock = product_stock_quantity(item.product) + int(item.quantity or 0)

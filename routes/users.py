@@ -86,7 +86,7 @@ def _seller_response_context(**kwargs):
 def login_page(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
     if user:
-        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/" if user.role == "admin" else "/", status_code=303)
+        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/moderation" if user.role == "manager" else "/admin/" if user.role == "admin" else "/", status_code=303)
     return request.app.state.templates.TemplateResponse(
         request,
         "login",
@@ -117,6 +117,8 @@ def login_submit(
 
     if user.role == "admin":
         return RedirectResponse("/admin/", status_code=303)
+    if user.role == "manager":
+        return RedirectResponse("/admin/moderation", status_code=303)
     if user.role == "accountant":
         return RedirectResponse("/accounting/", status_code=303)
     if user.role == "seller":
@@ -128,7 +130,7 @@ def login_submit(
 def forgot_password_page(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
     if user:
-        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/" if user.role == "admin" else "/", status_code=303)
+        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/moderation" if user.role == "manager" else "/admin/" if user.role == "admin" else "/", status_code=303)
     return request.app.state.templates.TemplateResponse(
         request, "forgot_password", {"error": None, "user": None}
     )
@@ -247,7 +249,7 @@ def reset_password_submit(
 def register_page(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
     if user:
-        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/" if user.role == "admin" else "/", status_code=303)
+        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/moderation" if user.role == "manager" else "/admin/" if user.role == "admin" else "/", status_code=303)
     return request.app.state.templates.TemplateResponse(
         request, "register", {"error": None, "user": None}
     )
@@ -257,7 +259,7 @@ def register_page(request: Request, db: Session = Depends(get_db)):
 def become_seller_page(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
     if user:
-        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/" if user.role == "admin" else "/", status_code=303)
+        return RedirectResponse("/seller/" if user.role == "seller" else "/accounting/" if user.role == "accountant" else "/admin/moderation" if user.role == "manager" else "/admin/" if user.role == "admin" else "/", status_code=303)
     return request.app.state.templates.TemplateResponse(
         request, "become_seller", _seller_response_context()
     )
@@ -270,7 +272,21 @@ def register_submit(
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    email = (email or "").strip()
+    email = (email or "").strip().lower()
+
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "register",
+            {"error": "Введите корректный email", "user": None, "email": email},
+        )
+
+    if len(password or "") < 6:
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "register",
+            {"error": "Пароль должен быть не короче 6 символов", "user": None, "email": email},
+        )
 
     if db.query(User).filter(User.email == email).first():
         return request.app.state.templates.TemplateResponse(
@@ -314,7 +330,7 @@ def become_seller_submit(
     farm_description: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    email = (email or "").strip()
+    email = (email or "").strip().lower()
     full_name = (full_name or "").strip()
     farm_name = (farm_name or "").strip()
     phone = (phone or "").strip()
@@ -331,6 +347,14 @@ def become_seller_submit(
         product_categories=product_categories,
         farm_description=farm_description,
     )
+
+    if "@" not in email or "." not in email.split("@")[-1]:
+        response_context["error"] = "Введите корректный email"
+        return request.app.state.templates.TemplateResponse(request, "become_seller", response_context)
+
+    if len(password or "") < 6:
+        response_context["error"] = "Пароль должен быть не короче 6 символов"
+        return request.app.state.templates.TemplateResponse(request, "become_seller", response_context)
 
     if db.query(User).filter(User.email == email).first():
         response_context["error"] = "Пользователь с таким email уже существует"
@@ -359,7 +383,7 @@ def become_seller_submit(
         supplier_document_url=None,
         supplier_bank_details=None,
         product_categories=product_categories,
-        seller_application_status="new",
+        seller_application_status="pending",
         seller_application_rejection_reason=None,
         seller_application_admin_comment=None,
     )

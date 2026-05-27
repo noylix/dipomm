@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     const h = React.createElement;
     const dataNode = document.getElementById("react-page-data");
     let props = {};
@@ -77,61 +77,48 @@
     }
     function deliveryMethodText(value) {
         return {
-            courier: "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u043c",
-            farmer_delivery: "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u043c",
+            courier: "\u041a\u0443\u0440\u044c\u0435\u0440",
             pickup: "\u0421\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437",
-            post: "\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u0441\u043a\u0430\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430",
-            partner_delivery: "\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u0441\u043a\u0430\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430",
+            post: "\u041f\u0443\u043d\u043a\u0442 \u0432\u044b\u0434\u0430\u0447\u0438",
             market: "\u0412\u044b\u0434\u0430\u0447\u0430 \u043d\u0430 \u0440\u044b\u043d\u043a\u0435"
         }[value] || value || "";
     }
     function deliveryPriceValue(value) {
-        if (value && typeof value === "object") {
-            return Number(value.delivery_fee || value.delivery_price || value.delivery && value.delivery.delivery_fee || 0);
-        }
-        return ({ farmer_delivery: 500, courier: 500, pickup: 0, partner_delivery: 700, post: 700, market: 0 })[value] || 0;
+        return ({ courier: 500, pickup: 0, post: 300, market: 150 })[value] || 0;
     }
     function paymentStatusText(value) {
-        return ({ pending: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u043f\u043b\u0430\u0442\u044b", paid: "\u041e\u043f\u043b\u0430\u0447\u0435\u043d\u043e", failed: "\u041e\u0448\u0438\u0431\u043a\u0430 \u043e\u043f\u043b\u0430\u0442\u044b", cancelled: "\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043e", canceled: "\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043e", refunded: "\u0412\u043e\u0437\u0432\u0440\u0430\u0442" })[value] || value || "-";
+        return ({ pending: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u043f\u043b\u0430\u0442\u044b", paid: "\u041e\u043f\u043b\u0430\u0447\u0435\u043d\u043e" })[value] || value || "-";
     }
     function orderStatusText(order, labels) {
-        if (order && ["created", "awaiting_payment"].includes(order.status || "") && order.payment_status === "pending") {
+        if (order && order.status === "created" && order.payment_status === "pending") {
             return "\u041e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u043f\u043b\u0430\u0442\u044b";
         }
         return (labels && order && labels[order.status]) || (order && order.status) || "-";
     }
     function deliveryStatusText(order) {
-        const status = order && order.delivery && order.delivery.status || order && order.delivery_status || order && order.status;
+        const status = order && order.status;
         return ({
             created: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u043f\u043b\u0430\u0442\u044b",
-            waiting_payment: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u043f\u043b\u0430\u0442\u044b",
-            waiting_assembly: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442 \u0441\u0431\u043e\u0440\u043a\u0438",
             paid: "\u041e\u043f\u043b\u0430\u0447\u0435\u043d, \u0436\u0434\u0435\u0442 \u0441\u0431\u043e\u0440\u043a\u0438",
             confirmed: "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d",
             assembling: "\u0421\u043e\u0431\u0438\u0440\u0430\u0435\u0442\u0441\u044f",
-            ready_for_pickup: "\u0413\u043e\u0442\u043e\u0432\u0430 \u043a \u0441\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437\u0443",
-            ready_for_delivery: "\u0413\u043e\u0442\u043e\u0432\u0430 \u043a \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0435",
-            transferred_to_delivery: "\u041f\u0435\u0440\u0435\u0434\u0430\u043d\u0430 \u0432 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0443",
-            shipped: "\u041f\u0435\u0440\u0435\u0434\u0430\u043d\u0430 \u0432 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0443",
-            in_transit: "\u0412 \u043f\u0443\u0442\u0438",
+            shipped: "\u041f\u0435\u0440\u0435\u0434\u0430\u043d \u0432 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0443",
             delivering: "\u0412 \u043f\u0443\u0442\u0438",
-            delivered: "\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0430",
-            completed: "\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0430",
+            completed: "\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d",
             canceled: "\u041e\u0442\u043c\u0435\u043d\u0435\u043d",
-            cancelled: "\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u0430",
             refunded: "\u0412\u043e\u0437\u0432\u0440\u0430\u0449\u0435\u043d"
         })[status] || status || "-";
     }
     function isOrderPayable(order) {
-        return order && ["created", "awaiting_payment", "payment_failed"].includes(order.status || "created") && (order.payment_status || "pending") === "pending";
+        return order && (order.status || "created") === "created" && (order.payment_status || "pending") === "pending";
     }
     function isOrderReceivable(order) {
-        return order && ["ready_for_pickup", "delivered"].includes(order.status || "");
+        return order && ["shipped", "delivering"].includes(order.status || "");
     }
     function logisticsStatusText(value) {
         return ({
             created: "Создана",
-            accepted: "Принята перевозчиком",
+            accepted: "Принята логистикой",
             in_transit: "В пути",
             delivered: "Доставлена",
             manual: "Без внешней службы"
@@ -147,22 +134,22 @@
     }
     function sellerApplicationStatusText(value) {
         return {
-            pending: "\u041d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435",
+            new: "\u041d\u043e\u0432\u0430\u044f",
+            in_progress: "\u0412 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0435",
+            waiting_documents: "\u041e\u0436\u0438\u0434\u0430\u044e\u0442\u0441\u044f \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b",
+            pending: "\u041d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438",
             approved: "\u041e\u0434\u043e\u0431\u0440\u0435\u043d\u0430",
             rejected: "\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430",
-            new: "\u041d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435",
-            in_progress: "\u041d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435",
-            waiting_documents: "\u041d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435",
-        }[value] || value || "\u041d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435";
+        }[value] || value || "\u041d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438";
     }
     function productStatusText(value) {
         return {
             approved: "\u041e\u0434\u043e\u0431\u0440\u0435\u043d",
-            pending: "\u041d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435",
+            pending: "\u041d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438",
             rejected: "\u041e\u0442\u043a\u043b\u043e\u043d\u0435\u043d"
         }[value] || value || "\u041e\u0434\u043e\u0431\u0440\u0435\u043d";
     }
-    const COMPLAINT_STATUS_OPTIONS = ["new", "in_progress", "resolved", "rejected"];
+    const COMPLAINT_STATUS_OPTIONS = ["new", "processing", "in_progress", "waiting_farmer", "sent_to_accountant", "resolved", "rejected", "closed"];
     function complaintStatusText(value) {
         return {
             new: "\u041d\u043e\u0432\u0430\u044f",
@@ -214,9 +201,9 @@
     }
     function statusChipTone(value) {
         const normalized = String(value || "").toLowerCase();
-        if (["approved", "paid", "completed", "received", "resolved", "transferred_to_partner", "delivered"].includes(normalized)) return "success";
-        if (["pending", "new", "created", "awaiting_payment", "confirmed", "processing", "in_progress", "waiting_documents", "waiting_farmer", "sent_to_accountant", "assembling", "ready_for_pickup", "ready_for_delivery", "waiting_payment", "waiting_assembly", "transferred_to_delivery", "in_transit", "shipped", "delivering", "open"].includes(normalized)) return "warning";
-        if (["rejected", "canceled", "cancelled", "refunded", "closed", "failed", "payment_failed"].includes(normalized)) return "danger";
+        if (["approved", "paid", "completed", "resolved", "transferred_to_partner"].includes(normalized)) return "success";
+        if (["pending", "new", "created", "confirmed", "processing", "in_progress", "waiting_documents", "waiting_farmer", "sent_to_accountant", "assembling", "shipped", "delivering", "open"].includes(normalized)) return "warning";
+        if (["rejected", "canceled", "cancelled", "refunded", "closed", "failed"].includes(normalized)) return "danger";
         return "neutral";
     }
     function StatusChip({ value, label }) {
@@ -290,14 +277,14 @@
         return h("div", { className: `react-price-display${compact ? " compact" : ""}` }, content);
     }
     const PRODUCT_IMAGE_URLS = {
-        vegetables: "/static/product-images/vegetables-herbs.jpg",
-        fruit: "/static/product-images/fruits-berries.jpg",
-        eggs: "/static/product-images/dairy-eggs.jpg",
-        honey: "/static/product-images/basket-hits.jpg",
-        bread: "/static/product-images/bread-vegetables.jpg",
-        dairy: "/static/product-images/dairy-eggs.jpg",
-        cheese: "/static/product-images/dairy-eggs.jpg",
-        meat: "/static/product-images/basket-hits.jpg"
+        vegetables: "https://images.unsplash.com/photo-1655558131320-b7d6d3686e8d?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        fruit: "https://images.unsplash.com/photo-1759087304853-bc735537640c?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        eggs: "https://images.unsplash.com/photo-1518476381266-33596bddffc0?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        honey: "https://images.unsplash.com/photo-1668510468038-3607aae3f03c?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        bread: "https://images.unsplash.com/photo-1756244389018-ebf8169a0ed3?auto=format&fit=crop&fm=jpg&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&ixlib=rb-4.1.0&q=60&w=3000",
+        dairy: "https://unsplash.com/photos/IfgP8D3Wye8/download?force=true",
+        cheese: "https://unsplash.com/photos/3PHZi-5wKiI/download?force=true",
+        meat: "https://unsplash.com/photos/raw-meat-DxJvLtab4ak/download?force=true"
     };
     function normalizeText(value) {
         return (value || "").toString().toLowerCase();
@@ -333,6 +320,10 @@
             return PRODUCT_IMAGE_URLS.fruit;
         }
         return PRODUCT_IMAGE_URLS.vegetables;
+    }
+    function productImage(product) {
+        if (product && product.image_url) return product.image_url;
+        return fallbackProductImage(product);
     }
     function productIconName(product) {
         const name = ((product && product.name) || "").toLowerCase();
@@ -785,31 +776,10 @@
     function Footer() {
         return h("footer", { className: "react-footer" },
             h("div", { className: "react-footer-inner wrap" }, [
-                h("div", { key: "brand", className: "react-footer-brand" }, [
-                    h("h4", null, "\u0421\u0432\u043e\u0438 \u0420\u044f\u0434\u044b"),
-                    h("p", null, "Фермерские продукты от локальных продавцов: каталог, заказ, оплата, доставка и поддержка в одном месте.")
-                ]),
-                h("div", { key: "clients", className: "react-footer-links" }, [
-                    h("h4", null, "Покупателям"),
-                    A({ href: "/delivery" }, "Доставка и самовывоз"),
-                    A({ href: "/quality" }, "Качество товаров"),
-                    A({ href: "/bonus" }, "Бонусы и скидки"),
-                    A({ href: "/reviews" }, "Отзывы")
-                ]),
-                h("div", { key: "company", className: "react-footer-links" }, [
-                    h("h4", null, "Площадка"),
-                    A({ href: "/about" }, "О нас"),
-                    A({ href: "/become-seller" }, "Стать поставщиком"),
-                    A({ href: "/business" }, "Для бизнеса"),
-                    A({ href: "/recipes" }, "Рецепты"),
-                    A({ href: "/blog" }, "Блог")
-                ]),
-                h("div", { key: "phone", className: "react-footer-contact" }, [
-                    h("h4", null, "8-906-440-29-35"),
-                    h("p", null, "Ежедневно с 8:00 до 21:00"),
-                    h("p", null, "Поможем с заказом, оплатой, доставкой и обращениями."),
-                    A({ href: "/complaints/create", className: "react-footer-help" }, "Написать в поддержку")
-                ])
+                h("div", { key: "brand" }, [h("h4", null, "\u0421\u0432\u043e\u0438 \u0420\u044f\u0434\u044b"), h("p", null, "\u0424\u0435\u0440\u043c\u0435\u0440\u0441\u043a\u0438\u0435 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u044b, \u043f\u0440\u043e\u0432\u0435\u0440\u0435\u043d\u043d\u044b\u0435 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u044b \u0438 \u043f\u043e\u043d\u044f\u0442\u043d\u0430\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430.")]),
+                h("div", { key: "clients" }, [h("h4", null, "\u041a\u043b\u0438\u0435\u043d\u0442\u0430\u043c"), A({ href: "/delivery" }, "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"), A({ href: "/reviews" }, "\u041e\u0442\u0437\u044b\u0432\u044b"), A({ href: "/quality" }, "\u041a\u0430\u0447\u0435\u0441\u0442\u0432\u043e"), A({ href: "/bonus" }, "\u0411\u043e\u043d\u0443\u0441\u044b")]),
+                h("div", { key: "company" }, [h("h4", null, "\u041a\u043e\u043c\u043f\u0430\u043d\u0438\u044f"), A({ href: "/about" }, "\u041e \u043d\u0430\u0441"), A({ href: "/blog" }, "\u0411\u043b\u043e\u0433"), A({ href: "/recipes" }, "\u0420\u0435\u0446\u0435\u043f\u0442\u044b")]),
+                h("div", { key: "phone" }, [h("h4", null, "8-906-440-29-35"), h("p", null, "\u0415\u0436\u0435\u0434\u043d\u0435\u0432\u043d\u043e \u0441 8 \u0434\u043e 21")])
             ])
         );
     }
@@ -928,6 +898,35 @@
             h("button", { className: compact ? "react-btn" : "react-btn wide", type: "submit", disabled: submitting }, submitting ? "\u0418\u0434\u0435\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430..." : "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0437\u0430\u044f\u0432\u043a\u0443")
         ]);
     }
+    function SellerSignupModal({ open, onClose }) {
+        React.useEffect(() => {
+            if (!open) return undefined;
+            const handleKeyDown = event => {
+                if (event.key === "Escape") onClose();
+            };
+            window.addEventListener("keydown", handleKeyDown);
+            return () => window.removeEventListener("keydown", handleKeyDown);
+        }, [open, onClose]);
+        if (!open) return null;
+        return h("div", { className: "react-modal-overlay", onClick: onClose }, [
+            h("section", {
+                key: "dialog",
+                className: "react-modal react-modal-wide",
+                role: "dialog",
+                "aria-modal": "true",
+                "aria-labelledby": "seller-signup-title",
+                onClick: event => event.stopPropagation()
+            }, [
+                h("div", { key: "head", className: "react-page-title" }, [
+                    h("h2", { id: "seller-signup-title" }, "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c"),
+                    h("button", { type: "button", className: "react-btn secondary", onClick: onClose }, "\u0417\u0430\u043a\u0440\u044b\u0442\u044c")
+                ]),
+                h("p", { className: "react-modal-text" }, "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043a\u043e\u0440\u043e\u0442\u043a\u0443\u044e \u0437\u0430\u044f\u0432\u043a\u0443. \u0421\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b \u0441\u0432\u044f\u0436\u0435\u0442\u0441\u044f \u0441 \u0432\u0430\u043c\u0438 \u0434\u043b\u044f \u0443\u0442\u043e\u0447\u043d\u0435\u043d\u0438\u044f \u0434\u0430\u043d\u043d\u044b\u0445 \u0438 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u044f."),
+                props.error && page === "become_seller" ? h("p", { className: "alert alert-danger" }, props.error) : null,
+                h(SellerApplicationForm, { compact: false })
+            ])
+        ]);
+    }
     function Shell({ children, onLogoutRequest, onBecomeSellerRequest, onLoginRequest, logoutConfirm, closeLogoutConfirm, confirmLogout, authView, closeAuth, switchAuth, noticeMessage, closeNotice }) {
         const activeAuthView = authView || (authRouteSet.has(page) ? page : null);
         if (authRouteSet.has(page)) {
@@ -1015,10 +1014,6 @@
         if (!product) return null;
         const status = stockStatus(product);
         const hasDiscount = Boolean(product.has_discount || (Number(product.discount_price || 0) > 0 && Number(product.discount_price || 0) < Number(product.price || 0)));
-        const productRating = Number(product.product_rating || 0);
-        const sellerRating = Number(product.seller_rating || 0);
-        const productReviewCount = Number(product.product_review_count || 0);
-        const sellerReviewCount = Number(product.seller_review_count || product.review_count || 0);
         return h("article", { className: `react-product-card stock-${status}` }, [
             A({ key: "img", href: `/product/${product.id}`, className: "react-product-image" },
                 h(React.Fragment, null, [
@@ -1028,11 +1023,7 @@
                 ])
             ),
             h("div", { key: "body", className: "react-product-body" }, [
-                h("div", { key: "chips", className: "react-chip-row react-product-meta" }, [
-                    product.category && h("span", { className: "react-chip" }, product.category),
-                    productRating ? h("span", { className: "react-chip react-rating-chip" }, `\u2605 \u0422\u043e\u0432\u0430\u0440 ${productRating}${productReviewCount ? ` (${productReviewCount})` : ""}`) : null,
-                    sellerRating ? h("span", { className: "react-chip react-rating-chip" }, `\u2605 \u0424\u0435\u0440\u043c\u0435\u0440 ${sellerRating}${sellerReviewCount ? ` (${sellerReviewCount})` : ""}`) : null
-                ]),
+                h("div", { key: "chips", className: "react-chip-row react-product-meta" }, [product.category && h("span", { className: "react-chip" }, product.category), product.seller_rating && h("span", { className: "react-chip" }, `\u2605 ${product.seller_rating}`)]),
                 A({ key: "name", href: `/product/${product.id}`, className: "react-product-name" }, product.name),
                 sellerLink(product)
                     ? A({ key: "seller", href: sellerLink(product), className: "react-muted" }, `\u043e\u0442 ${ownerName(product)}`)
@@ -1167,44 +1158,16 @@
     }
     function HomePage() {
         const banners = [
-            ["/catalog?category=new", "\u041d\u041e\u0412\u0418\u041d\u041a\u0418\n\u041d\u0415\u0414\u0415\u041b\u0418", "\u0421\u0432\u0435\u0436\u0438\u0435 \u043f\u043e\u0441\u0442\u0430\u0432\u043a\u0438", "tone-orange"],
-            ["/catalog?category=sale", "\u0417\u0415\u041b\u0415\u041d\u042b\u0415\n\u0426\u0415\u041d\u041d\u0418\u041a\u0418", "\u0422\u043e\u0432\u0430\u0440\u044b \u0441\u043e \u0441\u043a\u0438\u0434\u043a\u043e\u0439", "tone-green"],
-            ["/catalog?category=\u0444\u0440\u0443\u043a\u0442\u044b", "\u0424\u0420\u0423\u041a\u0422\u042b\n\u0418 \u042f\u0413\u041e\u0414\u042b", "\u0421\u0435\u0437\u043e\u043d\u043d\u0430\u044f \u043f\u043e\u043b\u043a\u0430", "tone-pink"],
-            ["/catalog?category=popular", "\u0425\u0418\u0422\u042b", "\u0427\u0430\u0449\u0435 \u0432\u0441\u0435\u0433\u043e \u0431\u0435\u0440\u0443\u0442", "tone-yellow"]
+            ["/catalog?category=new", "\u041d\u041e\u0412\u0418\u041d\u041a\u0418\n\u041d\u0415\u0414\u0415\u041b\u0418", "sparkles", "tone-orange"],
+            ["/catalog?category=\u0444\u0440\u0443\u043a\u0442\u044b", "\u0424\u0420\u0423\u041a\u0422\u042b\n\u0418 \u042f\u0413\u041e\u0414\u042b", "apple", "tone-pink"],
+            ["/catalog?category=sale", "\u0417\u0415\u041b\u0415\u041d\u042b\u0415\n\u0426\u0415\u041d\u042b", "badge-percent", "tone-green"],
+            ["/catalog?category=popular", "\u0425\u0418\u0422\u042b", "flame", "tone-yellow"]
         ];
-        const sections = props.home_sections || [];
-        const fallbackSection = !sections.length && (props.products || []).length
-            ? [{
-                id: "recommended",
-                title: "\u0420\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u0435\u043c \u0441\u0435\u0433\u043e\u0434\u043d\u044f",
-                text: "\u041f\u0435\u0440\u0432\u044b\u0435 \u0442\u043e\u0432\u0430\u0440\u044b \u0438\u0437 \u043e\u0431\u0449\u0435\u0439 \u0432\u0438\u0442\u0440\u0438\u043d\u044b.",
-                href: "/catalog",
-                products: (props.products || []).slice(0, 8)
-            }]
-            : [];
-        const homeSections = sections.length ? sections : fallbackSection;
         return h(React.Fragment, null, [
-            h("div", { className: "react-hero-banners" }, banners.map(([href, title, text, tone]) => A({ key: href, href, className: `react-banner ${tone}` }, [
-                h("span", { key: "copy", className: "react-banner-copy" }, [
-                    h("strong", null, title.split("\n").map((line, i) => h(React.Fragment, { key: i }, [line, i === 0 && title.includes("\n") ? h("br") : null]))),
-                    h("small", null, text)
-                ])
-            ]))),
-            h("div", { className: "react-home-shelves" }, homeSections.map(section =>
-                h("section", { key: section.id || section.title, className: "react-home-shelf" }, [
-                    h("div", { className: "react-home-shelf-head" }, [
-                        h("div", null, [
-                            h("h2", null, section.title),
-                            section.text ? h("p", null, section.text) : null
-                        ]),
-                        section.href ? A({ href: section.href, className: "react-btn secondary" }, "\u0421\u043c\u043e\u0442\u0440\u0435\u0442\u044c \u0432\u0441\u0435") : null
-                    ]),
-                    h(ProductsGrid, { products: section.products || [] })
-                ])
-            ))
+            h("div", { className: "react-hero-banners" }, banners.map(([href, title, icon, tone]) => h("div", { key: href, className: `react-banner ${tone}`, "aria-disabled": "true" }, [h("strong", null, title.split("\n").map((line, i) => h(React.Fragment, { key: i }, [line, i === 0 && title.includes("\n") ? h("br") : null]))), h("span", { className: "react-banner-icon" }, Icon({ name: icon }))]))),
+            h(ProductsGrid, { products: (props.products || []).slice(0, 8) })
         ]);
     }
-
     function CatalogPage() {
         const categories = [
             { value: "", label: "\u0412\u0441\u0435 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438" },
@@ -1351,7 +1314,7 @@
                 ])
             ]);
         if (page === "favorites" || page === "search") {
-        return h(React.Fragment, null, [
+            return h(React.Fragment, null, [
                 h("div", { className: "react-page-title" }, [page === "search" ? null : h("h1", null, "\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435"), h("span", { className: "react-muted" }, `${resultCount} \u0442\u043e\u0432\u0430\u0440\u043e\u0432`)]),
                 props.search_hint && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.search_hint),
                 content
@@ -1560,9 +1523,9 @@
     function AuthViewBody({ view, onSwitch, submitLoginInline, loginError }) {
         if (view === "forgot_password") {
             return [
-            props.error && h("p", { className: "alert alert-danger" }, props.error),
+                props.error && h("p", { className: "alert alert-danger" }, props.error),
                 h("form", { action: "/forgot-password", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
-                Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
+                    Field({ name: "email", type: "email", placeholder: "Email", defaultValue: props.email, required: true }),
                     h("button", { className: "react-btn", type: "submit" }, "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c")
                 ]),
                 h("div", { className: "react-auth-links" }, [
@@ -1745,101 +1708,129 @@
         const defaultDate = checkout.delivery_date || todayStr;
         const totalCount = groups.reduce((acc, group) => acc + (group.cart_items || []).length, 0);
         const goodsTotal = Number(props.total || 0);
+        const [deliveryMethod, setDeliveryMethod] = React.useState(checkout.delivery_method || "courier");
         const [paymentMethod, setPaymentMethod] = React.useState("yookassa");
+        const [deliveryDate, setDeliveryDate] = React.useState(defaultDate);
+        const [deliverySlot, setDeliverySlot] = React.useState(checkout.delivery_slot_choice || "10-14");
         const [minOrderNoticeOpen, setMinOrderNoticeOpen] = React.useState(false);
+        const deliveryMap = { pickup: 0, courier: 500 };
         const slotOptions = [
             { value: "10-14", label: "10:00 - 14:00", endHour: 14 },
             { value: "14-18", label: "14:00 - 18:00", endHour: 18 },
             { value: "18-22", label: "18:00 - 22:00", endHour: 22 }
         ];
+        const isToday = deliveryDate === todayStr;
+        const deliveryFee = Number(deliveryMap[deliveryMethod] || 0);
+        const grandTotal = goodsTotal + deliveryFee;
         const minOrderAmount = Number(props.min_order_amount || 3000);
         const minOrderShortage = Math.max(0, Number(props.min_order_shortage != null ? props.min_order_shortage : (minOrderAmount - goodsTotal)));
         const hasMinOrderErrors = minOrderShortage > 0;
-        const minOrderText = `\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430 \u0437\u0430\u043a\u0430\u0437\u0430: ${money(minOrderAmount)}`;
-        const minOrderMessage = props.min_order_message || `\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430 \u0437\u0430\u043a\u0430\u0437\u0430: ${money(minOrderAmount)}. \u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u0442\u043e\u0432\u0430\u0440\u043e\u0432 \u0435\u0449\u0451 \u043d\u0430 ${money(minOrderShortage)}.`;
+        const minOrderText = `Минимальная сумма заказа: ${money(minOrderAmount)}`;
+        const minOrderMessage = props.min_order_message || `Минимальная сумма заказа — ${money(minOrderAmount)}. Добавьте товары еще на ${money(minOrderShortage)}.`;
         const activeGroups = groups.filter(group => (group.cart_items || []).length > 0);
         const multipleSellers = activeGroups.length > 1;
-        const [deliveryChoices, setDeliveryChoices] = React.useState(() => {
-            const initial = {};
-            activeGroups.forEach(group => {
-                const key = group.seller_id === null || group.seller_id === undefined ? "__none__" : String(group.seller_id);
-                const options = group.delivery_options || [];
-                const slots = group.delivery_slots && group.delivery_slots.length ? group.delivery_slots : ["10-14", "14-18", "18-22"];
-                initial[key] = { method: checkout.delivery_method || (options[0] && options[0].method) || "pickup", date: defaultDate, slot: checkout.delivery_slot_choice || slots[0] || "10-14" };
-            });
-            return initial;
-        });
-        const setChoice = (key, patch) => setDeliveryChoices(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
-        const optionFor = (group, method) => (group.delivery_options || []).find(option => option.method === method) || {};
-        const deliveryTotal = activeGroups.reduce((sum, group) => {
-            const key = group.seller_id === null || group.seller_id === undefined ? "__none__" : String(group.seller_id);
-            const choice = deliveryChoices[key] || {};
-            return sum + Number(optionFor(group, choice.method).fee || 0);
-        }, 0);
-        const grandTotal = goodsTotal + deliveryTotal;
-        const hasUnavailableDelivery = activeGroups.some(group => !(group.delivery_options || []).length);
-        const handleCheckoutSubmit = event => handleSubmitOnce(event);
-        function deliveryBlock(group) {
-            const sellerName = group.seller_name || "\u041f\u0440\u043e\u0434\u0430\u0432\u0435\u0446";
-            const key = group.seller_id === null || group.seller_id === undefined ? "__none__" : String(group.seller_id);
-            const options = group.delivery_options || [];
-            const slots = group.delivery_slots && group.delivery_slots.length ? group.delivery_slots : ["10-14", "14-18", "18-22"];
-            const choice = deliveryChoices[key] || { method: options[0] && options[0].method || "pickup", date: defaultDate, slot: slots[0] || "10-14" };
-            const selected = optionFor(group, choice.method);
-            const isDelivery = choice.method === "farmer_delivery" || choice.method === "partner_delivery";
+        const sellerOrderButtons = activeGroups.map(group => {
+            const groupSubtotal = Number(group.subtotal || 0);
             const groupShortage = Math.max(0, Number(group.shortage || 0));
-            return h("section", { key: `checkout-${key}`, className: "react-card react-checkout-group" }, [
-                h("div", { className: "react-page-title" }, [
-                    h("div", null, [h("h3", null, sellerName), h("p", { className: "react-muted" }, multipleSellers ? "\u0411\u0443\u0434\u0435\u0442 \u0441\u043e\u0437\u0434\u0430\u043d \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437 \u0443 \u044d\u0442\u043e\u0433\u043e \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430." : "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043f\u043e\u0441\u043e\u0431 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f.")]),
-                    h("strong", null, money(Number(group.subtotal || 0) + Number(selected.fee || 0)))
-                ]),
-                groupShortage > 0 && h("span", { className: "react-cart-min-order-warning" }, `\u0414\u043e \u043c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u0437\u0430\u043a\u0430\u0437\u0430 \u0443 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430: ${money(groupShortage)}.`),
-                options.length ? h("div", { className: "react-chip-row" }, options.map(option => h("button", { key: option.method, type: "button", className: `react-chip react-chip-button ${choice.method === option.method ? "active" : ""}`, onClick: () => setChoice(key, { method: option.method }) }, `${option.label || deliveryMethodText(option.method)} · ${money(option.fee || 0)}`))) : h("div", { className: "react-cart-min-order-warning" }, "\u0423 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430 \u043d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u044b \u0441\u043f\u043e\u0441\u043e\u0431\u044b \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f."),
-                h("input", { type: "hidden", name: `delivery_method_${key}`, value: choice.method }),
-                h("input", { type: "hidden", name: `delivery_slot_choice_${key}`, value: choice.slot }),
-                h("div", { className: "react-form-grid" }, [
-                    isDelivery ? Field({ name: `address_${key}`, placeholder: "\u0410\u0434\u0440\u0435\u0441 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438", defaultValue: checkout.address || "", className: "wide", required: true, maxLength: 500 }) : h("div", { className: "wide react-muted" }, selected.pickup_address ? `\u0410\u0434\u0440\u0435\u0441 \u0441\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437\u0430: ${selected.pickup_address}` : "\u0410\u0434\u0440\u0435\u0441 \u0441\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437\u0430 \u043f\u0440\u043e\u0434\u0430\u0432\u0435\u0446 \u0443\u0442\u043e\u0447\u043d\u0438\u0442 \u043f\u043e\u0441\u043b\u0435 \u043e\u043f\u043b\u0430\u0442\u044b."),
-                    Field({ name: `delivery_date_${key}`, type: "date", defaultValue: choice.date || defaultDate, min: todayStr, onChange: e => setChoice(key, { date: e.target.value }) }),
-                    h("div", { className: "wide react-stack" }, [h("label", { className: "react-muted" }, "\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u043e\u0439 \u0441\u043b\u043e\u0442"), h("div", { className: "react-chip-row" }, slots.map(slotValue => {
-                        const slotMeta = slotOptions.find(slot => slot.value === slotValue) || { value: slotValue, label: slotValue, endHour: 24 };
-                        const disabled = (choice.date || defaultDate) === todayStr && today.getHours() >= slotMeta.endHour;
-                        return h("button", { key: slotValue, type: "button", disabled, className: `react-chip react-chip-button ${choice.slot === slotValue ? "active" : ""}`, onClick: () => !disabled && setChoice(key, { slot: slotValue }) }, slotMeta.label);
-                    }))]),
-                    Textarea({ name: `comment_${key}`, placeholder: isDelivery ? "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u0434\u043b\u044f \u0444\u0435\u0440\u043c\u0435\u0440\u0430 \u0438\u043b\u0438 \u043a\u0443\u0440\u044c\u0435\u0440\u0430" : "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u043a \u0437\u0430\u043a\u0430\u0437\u0443", defaultValue: checkout.comment || "", className: "wide", rows: 3, maxLength: 2000 })
-                ]),
-                choice.method === "partner_delivery" && h("p", { className: "react-muted" }, "\u041f\u043e\u0441\u043b\u0435 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f \u0431\u0443\u0434\u0435\u0442 \u0441\u043e\u0437\u0434\u0430\u043d \u0434\u0435\u043c\u043e-\u0442\u0440\u0435\u043a-\u043d\u043e\u043c\u0435\u0440 \u043f\u0430\u0440\u0442\u043d\u0451\u0440\u0441\u043a\u043e\u0439 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438."),
-                selected.comment ? h("p", { className: "react-muted" }, selected.comment) : null
+            const groupDisabled = groupShortage > 0;
+            const sellerName = group.seller_name || "Продавец";
+            const buttonLabel = multipleSellers ? `Оформить у ${sellerName}` : "Оформить заказ";
+            const buttonValue = group.seller_id === null || group.seller_id === undefined ? "__none__" : String(group.seller_id);
+            return h("div", { key: `checkout-${buttonValue}`, className: "react-cart-seller-checkout" }, [
+                multipleSellers && h("div", { className: "react-cart-summary-row" }, [h("span", null, sellerName), h("b", null, money(groupSubtotal + deliveryFee))]),
+                h("button", {
+                    className: `react-btn react-cart-submit ${groupDisabled ? "is-disabled" : ""}`,
+                    type: "submit",
+                    name: "seller_id",
+                    value: buttonValue,
+                    disabled: groupDisabled,
+                    "aria-disabled": groupDisabled ? "true" : "false"
+                }, buttonLabel),
+                groupDisabled && h("span", { className: "react-cart-min-order-warning" }, `Добавьте товары у этого продавца еще на ${money(groupShortage)}.`)
             ]);
-        }
+        });
+        const handleCheckoutSubmit = event => {
+            return handleSubmitOnce(event);
+        };
         return h(React.Fragment, null, [
             h("div", { className: "react-page-title" }, [h("h1", null, "\u041a\u043e\u0440\u0437\u0438\u043d\u0430")]),
             props.cart_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.cart_error),
             props.cart_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.cart_success),
             hasItems ? h("div", { className: "react-cart-layout" }, [
-                h("section", { className: "react-cart-main" }, [h("div", { className: "react-cart-items" }, groups.map(group => {
-                    const sellerName = group.seller_name || "\u041f\u0440\u043e\u0434\u0430\u0432\u0435\u0446";
-                    const groupItems = group.cart_items || [];
-                    const groupShortage = Math.max(0, Number(group.shortage || 0));
-                    return h("div", { key: `seller-${group.seller_id}`, className: "react-panel react-cart-seller-group" }, [h("div", { className: "react-cart-seller-row" }, [h("b", null, sellerName), h("span", { className: "react-muted" }, `${groupItems.length} \u043f\u043e\u0437.`), h("strong", null, money(Number(group.subtotal || 0)))]), groupShortage > 0 && h("span", { className: "react-cart-min-order-warning" }, `\u0414\u043e \u043c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u0437\u0430\u043a\u0430\u0437\u0430 \u0443 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430: ${money(groupShortage)}.`), h("div", { className: "react-cart-seller-items" }, groupItems.map(item => h(CartItemRow, { key: `${group.seller_id}-${item.id}`, item, sellerName })))]);
-                }))]),
+                h("section", { className: "react-cart-main" }, [
+                    h("div", { className: "react-cart-items" }, groups.map(group => {
+                        const sellerName = group.seller_name || "\u041f\u0440\u043e\u0434\u0430\u0432\u0435\u0446";
+                        const groupItems = group.cart_items || [];
+                        const groupShortage = Math.max(0, Number(group.shortage || 0));
+                        return h("div", { key: `seller-${group.seller_id}`, className: "react-panel react-cart-seller-group" }, [
+                            h("div", { className: "react-cart-seller-row" }, [
+                                h("b", null, sellerName),
+                                h("span", { className: "react-muted" }, `${groupItems.length} поз.`),
+                                h("strong", null, money(Number(group.subtotal || 0)))
+                            ]),
+                            groupShortage > 0 && h("span", { className: "react-cart-min-order-warning" }, `До минимального заказа у продавца: ${money(groupShortage)}.`),
+                            h("div", { className: "react-cart-seller-items" }, groupItems.map(item => h(CartItemRow, { key: `${group.seller_id}-${item.id}`, item, sellerName })))
+                        ]);
+                    }))
+                ]),
                 h("aside", { className: "react-panel react-cart-summary" }, [
                     h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u041a\u043e\u043b-\u0432\u043e \u0442\u043e\u0432\u0430\u0440\u043e\u0432"), h("b", null, totalCount)]),
                     h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0421\u0443\u043c\u043c\u0430 \u0442\u043e\u0432\u0430\u0440\u043e\u0432"), h("b", null, money(goodsTotal))]),
-                    h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"), h("b", null, money(deliveryTotal))]),
-                    h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0418\u0442\u043e\u0433"), h("b", null, money(grandTotal))]),
-                    multipleSellers && h("p", { className: "react-muted react-cart-min-order" }, "\u0412 \u043a\u043e\u0440\u0437\u0438\u043d\u0435 \u0442\u043e\u0432\u0430\u0440\u044b \u0440\u0430\u0437\u043d\u044b\u0445 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u043e\u0432. \u041f\u0440\u0438 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0438 \u0441\u0438\u0441\u0442\u0435\u043c\u0430 \u0441\u043e\u0437\u0434\u0430\u0441\u0442 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437 \u043f\u043e \u043a\u0430\u0436\u0434\u043e\u043c\u0443 \u0444\u0435\u0440\u043c\u0435\u0440\u0443, \u0441\u043f\u043e\u0441\u043e\u0431 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f \u0432\u044b\u0431\u0438\u0440\u0430\u0435\u0442\u0441\u044f \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u043e."),
+                    h("div", { className: "react-cart-summary-row" }, [h("span", null, multipleSellers ? "Доставка за заказ" : "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"), h("b", null, money(deliveryFee))]),
+                    !multipleSellers && h("div", { className: "react-cart-summary-row" }, [h("span", null, "\u0418\u0442\u043e\u0433"), h("b", null, money(grandTotal))]),
+                    multipleSellers && h("p", { className: "react-muted react-cart-min-order" }, "В корзине товары разных продавцов. Оформите их отдельными заказами."),
                     h("form", { action: "/order/create", method: "post", className: "react-cart-checkout-form", onSubmit: handleCheckoutSubmit }, [
-                        h("div", { className: "react-form-grid" }, [Field({ name: "full_name", placeholder: "\u0424\u0418\u041e \u043f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u044f", defaultValue: checkout.full_name || (user && user.full_name) || "", required: true, maxLength: 255 }), Field({ name: "phone", placeholder: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d", defaultValue: checkout.phone || (user && user.phone) || "", required: true, maxLength: 50 }), h("input", { type: "hidden", name: "payment_method", value: paymentMethod }), h("div", { className: "wide react-stack" }, [h("label", { className: "react-muted" }, "\u0421\u043f\u043e\u0441\u043e\u0431 \u043e\u043f\u043b\u0430\u0442\u044b"), h("div", { className: "react-chip-row" }, [h("button", { type: "button", className: "react-chip react-chip-button active", onClick: () => setPaymentMethod("yookassa") }, "\u041e\u043d\u043b\u0430\u0439\u043d")])]), Field({ name: "coupon_code", placeholder: "\u041f\u0440\u043e\u043c\u043e\u043a\u043e\u0434", defaultValue: checkout.coupon_code || "", maxLength: 50 })]),
-                        h("div", { className: "react-stack" }, activeGroups.map(deliveryBlock)),
+                        h("div", { className: "react-form-grid" }, [
+                            Field({ name: "full_name", placeholder: "\u0424\u0418\u041e \u043f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u044f", defaultValue: checkout.full_name || (user && user.full_name) || "", required: true, maxLength: 255 }),
+                            Field({ name: "phone", placeholder: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d", defaultValue: checkout.phone || (user && user.phone) || "", required: true, maxLength: 50 }),
+                            h("input", { type: "hidden", name: "delivery_method", value: deliveryMethod }),
+                            h("input", { type: "hidden", name: "payment_method", value: paymentMethod }),
+                            h("input", { type: "hidden", name: "delivery_slot_choice", value: deliverySlot }),
+                            h("div", { className: "wide react-stack" }, [
+                                h("label", { className: "react-muted" }, "Способ доставки"),
+                                h("div", { className: "react-chip-row" }, [
+                                    h("button", { type: "button", className: `react-chip react-chip-button ${deliveryMethod === "pickup" ? "active" : ""}`, onClick: () => setDeliveryMethod("pickup") }, "Самовывоз"),
+                                    h("button", { type: "button", className: `react-chip react-chip-button ${deliveryMethod === "courier" ? "active" : ""}`, onClick: () => setDeliveryMethod("courier") }, "Курьер")
+                                ])
+                            ]),
+                            h("div", { className: "wide react-stack" }, [
+                                h("label", { className: "react-muted" }, "Способ оплаты"),
+                                h("div", { className: "react-chip-row" }, [
+                                    h("button", { type: "button", className: "react-chip react-chip-button active", onClick: () => setPaymentMethod("yookassa") }, "Онлайн")
+                                ])
+                            ]),
+                            Field({ name: "address", placeholder: "\u0410\u0434\u0440\u0435\u0441 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0438\u043b\u0438 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u043a \u0441\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437\u0443", defaultValue: checkout.address || "", className: "wide", maxLength: 500 }),
+                            Field({ name: "coupon_code", placeholder: "\u041f\u0440\u043e\u043c\u043e\u043a\u043e\u0434", defaultValue: checkout.coupon_code || "", maxLength: 50 }),
+                            Field({ name: "delivery_date", type: "date", defaultValue: defaultDate, min: todayStr, onChange: e => setDeliveryDate(e.target.value) }),
+                            h("div", { className: "wide react-stack" }, [
+                                h("label", { className: "react-muted" }, "Слот доставки"),
+                                h("div", { className: "react-chip-row" }, slotOptions.map(slot => {
+                                    const disabled = isToday && today.getHours() >= slot.endHour;
+                                    return h("button", {
+                                        type: "button",
+                                        disabled,
+                                        className: `react-chip react-chip-button ${deliverySlot === slot.value ? "active" : ""}`,
+                                        onClick: () => !disabled && setDeliverySlot(slot.value)
+                                    }, slot.label);
+                                }))
+                            ]),
+                            Textarea({ name: "comment", placeholder: "\u041a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439 \u043a \u0437\u0430\u043a\u0430\u0437\u0443", defaultValue: checkout.comment || "", className: "wide", rows: 4, maxLength: 2000 })
+                        ]),
+                        h("div", { className: "react-cart-submit-stack" }, sellerOrderButtons),
                         minOrderText && h("p", { className: "react-muted react-cart-min-order" }, minOrderText),
-                        hasMinOrderErrors && h("span", { className: "react-cart-min-order-warning" }, minOrderMessage),
-                        h("p", { className: "react-muted" }, "\u0417\u0430\u043a\u0430\u0437 \u0431\u0443\u0434\u0435\u0442 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043d \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u043e\u0441\u043b\u0435 \u0443\u0441\u043f\u0435\u0448\u043d\u043e\u0439 \u043e\u043f\u043b\u0430\u0442\u044b."),
-                        h("button", { className: `react-btn react-cart-submit ${hasMinOrderErrors || hasUnavailableDelivery ? "is-disabled" : ""}`, type: "submit", disabled: hasMinOrderErrors || hasUnavailableDelivery }, "\u041f\u0435\u0440\u0435\u0439\u0442\u0438 \u043a \u043e\u043f\u043b\u0430\u0442\u0435")
+                        !multipleSellers && hasMinOrderErrors && h("span", { className: "react-cart-min-order-warning" }, minOrderMessage)
                     ]),
-                    h("div", { className: "react-cart-clear-wrap" }, [PostButton({ action: "/cart/clear", children: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u043a\u043e\u0440\u0437\u0438\u043d\u0443", className: "react-btn secondary", confirmMessage: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u043a\u043e\u0440\u0437\u0438\u043d\u0443?" })])
+                    h("div", { className: "react-cart-clear-wrap" }, [
+                        PostButton({ action: "/cart/clear", children: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u043a\u043e\u0440\u0437\u0438\u043d\u0443", className: "react-btn secondary", confirmMessage: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u043a\u043e\u0440\u0437\u0438\u043d\u0443?" })
+                    ])
                 ])
             ]) : h("div", { className: "react-empty react-panel" }, [h("p", null, "\u041a\u043e\u0440\u0437\u0438\u043d\u0430 \u043f\u0443\u0441\u0442\u0430\u044f."), ButtonLink({ href: "/catalog" }, "\u041f\u0435\u0440\u0435\u0439\u0442\u0438 \u0432 \u043a\u0430\u0442\u0430\u043b\u043e\u0433")]),
-            h(NoticeDialog, { open: minOrderNoticeOpen, title: "\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430 \u0437\u0430\u043a\u0430\u0437\u0430", text: minOrderMessage, onClose: () => setMinOrderNoticeOpen(false) })
+            h(NoticeDialog, {
+                open: minOrderNoticeOpen,
+                title: "Минимальная сумма заказа",
+                text: minOrderMessage,
+                onClose: () => setMinOrderNoticeOpen(false)
+            })
         ]);
     }
     function SellerPage() {
@@ -1851,8 +1842,10 @@
         const [productFilter, setProductFilter] = React.useState("all");
         const activeProducts = products.filter(product => product.status === "approved");
         const pendingProducts = products.filter(product => product.status === "pending");
+        const rejectedProducts = products.filter(product => product.status === "rejected");
         const lowStockProducts = products.filter(product => stockStatus(product) === "low");
         const outOfStockProducts = products.filter(product => stockStatus(product) === "out");
+        const recentProducts = products.slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0)).slice(0, 5);
         const filteredProducts = products.filter(product => {
             if (productFilter === "active") return product.status === "approved";
             if (productFilter === "pending") return product.status === "pending";
@@ -1864,7 +1857,6 @@
         const tabs = [
             { id: "overview", label: "\u041e\u0431\u0437\u043e\u0440" },
             { id: "profile", label: "\u0410\u043d\u043a\u0435\u0442\u0430" },
-            { id: "delivery", label: "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430" },
             { id: "products", label: "\u0422\u043e\u0432\u0430\u0440\u044b" },
             { id: "add", label: "\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c" },
             { id: "finance", label: "\u0424\u0438\u043d\u0430\u043d\u0441\u044b" }
@@ -1936,40 +1928,6 @@
                         : h("div", { className: "react-empty" }, "\u0421\u0435\u0440\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.")
                 ])
             ]),
-            tab === "delivery" && h("section", { className: "react-panel react-stack" }, [
-                h("div", { className: "react-page-title" }, [h("h2", null, "Настройки доставки")]),
-                h("form", { action: "/seller/delivery/settings", method: "post", className: "react-stack", onSubmit: handleSubmitOnce }, [
-                    h("div", { className: "react-info-grid" }, [
-                        h("div", { className: "react-card react-stack" }, [
-                            h("h3", null, "Самовывоз"),
-                            h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "pickup_enabled", value: "1", defaultChecked: Number(seller.pickup_enabled == null ? 1 : seller.pickup_enabled) === 1 }), h("span", null, "Включить самовывоз")]),
-                            Field({ name: "pickup_address", placeholder: "Адрес самовывоза", defaultValue: seller.pickup_address || seller.farm_address || "", maxLength: 500 }),
-                            Textarea({ name: "pickup_comment", placeholder: "Комментарий для покупателя", defaultValue: seller.pickup_comment || "", rows: 3, maxLength: 1000 })
-                        ]),
-                        h("div", { className: "react-card react-stack" }, [
-                            h("h3", null, "Доставка силами фермера"),
-                            h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "farmer_delivery_enabled", value: "1", defaultChecked: Number(seller.farmer_delivery_enabled == null ? 1 : seller.farmer_delivery_enabled) === 1 }), h("span", null, "Включить доставку фермером")]),
-                            Field({ name: "farmer_delivery_fee", type: "number", min: "0", step: "1", placeholder: "Стоимость доставки", defaultValue: seller.farmer_delivery_fee || 0 }),
-                            Field({ name: "farmer_delivery_min_order", type: "number", min: "0", step: "1", placeholder: "Минимальная сумма заказа для доставки", defaultValue: seller.farmer_delivery_min_order || 0 }),
-                            Textarea({ name: "farmer_delivery_comment", placeholder: "Районы доставки / комментарий", defaultValue: seller.farmer_delivery_comment || "", rows: 3, maxLength: 1000 }),
-                            h("div", { className: "react-stack" }, [
-                                h("label", { className: "react-muted" }, "Доступные временные слоты"),
-                                h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "delivery_slots", value: "10-14", defaultChecked: !seller.delivery_slots || String(seller.delivery_slots).includes("10-14") }), h("span", null, "10:00 - 14:00")]),
-                                h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "delivery_slots", value: "14-18", defaultChecked: !seller.delivery_slots || String(seller.delivery_slots).includes("14-18") }), h("span", null, "14:00 - 18:00")]),
-                                h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "delivery_slots", value: "18-22", defaultChecked: !seller.delivery_slots || String(seller.delivery_slots).includes("18-22") }), h("span", null, "18:00 - 22:00")])
-                            ])
-                        ]),
-                        h("div", { className: "react-card react-stack" }, [
-                            h("h3", null, "Партнёрская доставка"),
-                            h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "partner_delivery_enabled", value: "1", defaultChecked: Number(seller.partner_delivery_enabled || 0) === 1 }), h("span", null, "Включить партнёрскую доставку")]),
-                            Field({ name: "partner_delivery_fee", type: "number", min: "0", step: "1", placeholder: "Стоимость партнёрской доставки", defaultValue: seller.partner_delivery_fee || 700 }),
-                            Textarea({ name: "partner_delivery_comment", placeholder: "Комментарий к партнёрской доставке", defaultValue: seller.partner_delivery_comment || "", rows: 3, maxLength: 1000 }),
-                            h("p", { className: "react-muted" }, "В учебной версии используется демонстрационный режим без подключения реального API")
-                        ])
-                    ]),
-                    h("button", { className: "react-btn", type: "submit" }, "Сохранить настройки доставки")
-                ])
-            ]),
             tab === "overview" && h(React.Fragment, null, [
                 h("div", { className: "react-stat-grid" }, [
                     h("div", { className: "react-card" }, [h("h2", null, activeProducts.length), h("p", null, "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0435 \u0442\u043e\u0432\u0430\u0440\u044b")]),
@@ -2031,6 +1989,180 @@
             h("button", { className: "react-btn wide", type: "submit" }, product.id ? "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c" : "\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440")
         ]);
     }
+    function ConversationListPage() {
+        const conversations = props.conversations || [];
+        return h("section", { className: "react-panel" }, [
+            h("div", { className: "react-page-title" }, [
+                h("h1", null, "\u0414\u0438\u0430\u043b\u043e\u0433\u0438"),
+                user && user.role === "seller" && ButtonLink({ href: "/seller/support", className: "secondary" }, "\u041f\u043e\u0434\u0434\u0435\u0440\u0436\u043a\u0430")
+            ]),
+            conversations.length ? h("div", { className: "react-stack" }, conversations.map(item => {
+                const conv = item.conversation || item;
+                const typeLabel = {
+                    order_chat: "\u0417\u0430\u043a\u0430\u0437",
+                    product_question: "\u0422\u043e\u0432\u0430\u0440",
+                    complaint: "\u0416\u0430\u043b\u043e\u0431\u0430",
+                    support_request: "\u041f\u043e\u0434\u0434\u0435\u0440\u0436\u043a\u0430",
+                    finance_request: "\u0424\u0438\u043d\u0430\u043d\u0441\u044b"
+                }[conv.type] || conv.type;
+                return h("div", { key: conv.id, className: "react-card" }, [
+                    h("b", null, `${typeLabel} #${conv.id}`),
+                    h("p", null, item.order_number ? `\u0417\u0430\u043a\u0430\u0437 ${item.order_number}` : item.product_name ? item.product_name : item.complaint_id ? `\u041e\u0431\u0440. #${item.complaint_id}` : ""),
+                    h("p", { className: "react-muted" }, item.last_message ? item.last_message.text : "Без сообщений"),
+                    h("div", { className: "react-actions" }, [
+                        ButtonLink({ href: `/conversations/${conv.id}`, className: "secondary" }, "Открыть")
+                    ])
+                ]);
+            })) : h("div", { className: "react-empty" }, "Без диалогов.")
+        ]);
+    }
+    function ConversationPage() {
+        const conversation = props.conversation || {};
+        const messages = props.messages || [];
+        const typeLabel = {
+            order_chat: "\u0417\u0430\u043a\u0430\u0437",
+            product_question: "\u0422\u043e\u0432\u0430\u0440",
+            complaint: "\u0416\u0430\u043b\u043e\u0431\u0430",
+            support_request: "\u041f\u043e\u0434\u0434\u0435\u0440\u0436\u043a\u0430",
+            finance_request: "\u0424\u0438\u043d\u0430\u043d\u0441\u044b"
+        }[conversation.type] || conversation.type || "\u0414\u0438\u0430\u043b\u043e\u0433";
+        const title = conversation.order ? `\u0417\u0430\u043a\u0430\u0437 ${orderDisplayNumber(conversation.order)}` : conversation.product ? conversation.product.name : `#${conversation.id || ""}`;
+        return h("section", { className: "react-panel react-stack" }, [
+            h("div", { className: "react-page-title" }, [
+                h("div", null, [
+                    h("h1", null, title),
+                    h("p", { className: "react-muted" }, typeLabel)
+                ]),
+                ButtonLink({ href: "/conversations/", className: "secondary" }, "\u041a \u0434\u0438\u0430\u043b\u043e\u0433\u0430\u043c")
+            ]),
+            h("div", { className: "react-info-grid" }, [
+                h("div", { className: "react-card" }, [h("b", null, "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438"), h("p", null, [conversation.buyer ? (conversation.buyer.full_name || conversation.buyer.email) : "-", " / ", conversation.farmer ? (conversation.farmer.farm_name || conversation.farmer.full_name || conversation.farmer.email) : "-"])]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0421\u0442\u0430\u0442\u0443\u0441"), h("p", null, conversation.status || "-")]),
+                conversation.product && h("div", { className: "react-card" }, [h("b", null, "\u0422\u043e\u0432\u0430\u0440"), h("p", null, conversation.product.name)]),
+                conversation.complaint && h("div", { className: "react-card" }, [h("b", null, "\u041e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u0435"), h("p", null, COMPLAINT_CATEGORY_LABELS[conversation.complaint.category] || conversation.complaint.category || "-")])
+            ]),
+            h("section", { className: "react-panel react-stack" }, [
+                h("h2", null, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f"),
+                messages.length ? h("div", { className: "react-chat-list" }, messages.map(message => h("div", { key: message.id, className: `react-chat-message${message.sender_id === (user && user.id) ? " own" : ""}` }, [
+                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "\u0423\u0447\u0430\u0441\u0442\u043d\u0438\u043a"} В· ${message.sender_role || ""}`),
+                    h("p", null, message.text),
+                    h("span", { className: "react-muted" }, dateText(message.created_at))
+                ]))) : h("div", { className: "react-empty" }, "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438Р в„– Р С—Р С•Р С”Р В° Р Р…Р ВµРЎвЂљ."),
+                props.can_reply && h("form", { action: `/conversations/${conversation.id}/message`, method: "post", encType: "multipart/form-data", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+                    Textarea({ name: "text", placeholder: "\u041d\u0430Р С—Р С‘РЎЛ†Р С‘РЎвЂљР Вµ РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘Р Вµ", className: "wide", rows: 4, required: true, maxLength: 2000 }),
+                    h("input", { name: "attachment", type: "file", className: "react-input wide" }),
+                    h("button", { className: "react-btn wide", type: "submit" }, "\u041eРЎвЂљР С—РЎР‚Р В°Р Р†Р С‘РЎвЂљРЎРЉ")
+                ])
+            ])
+        ]);
+    }
+    function ComplaintDetailPage() {
+        const complaint = props.complaint || {};
+        const conversation = props.conversation || {};
+        const messages = props.messages || [];
+        return h("section", { className: "react-panel react-stack" }, [
+            h("div", { className: "react-page-title" }, [
+                h("div", null, [
+                    h("h1", null, `\u0416\u0430\u043b\u043e\u0431\u0430 #${complaint.id || ""}`),
+                    h("p", { className: "react-muted" }, COMPLAINT_CATEGORY_LABELS[complaint.category] || complaint.category || complaint.type || "-")
+                ]),
+                ButtonLink({ href: "/complaints/admin", className: "secondary" }, "\u041a \u0441Р С—Р С‘РЎРѓР С”РЎС“")
+            ]),
+            h("div", { className: "react-info-grid" }, [
+                h("div", { className: "react-card" }, [h("b", null, "\u0421РЎвЂљР В°РЎвЂљРЎС“РЎРѓ"), h("p", null, complaint.status || "-")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0410Р Т‘РЎР‚Р ВµРЎРѓР В°РЎвЂљ"), h("p", null, complaint.assigned_to_role || "-")]),
+                complaint.order_id && h("div", { className: "react-card" }, [h("b", null, "\u0417Р В°Р С”Р В°Р В·"), h("p", null, `#${complaint.order_id}`)]),
+                complaint.target_user_id && h("div", { className: "react-card" }, [h("b", null, "\u0424Р ВµРЎР‚Р СР ВµРЎР‚"), h("p", null, `${complaint.target_user_id}`)])
+            ]),
+            h("div", { className: "react-panel" }, h("p", null, complaint.text || complaint.description || "")),
+            complaint.admin_response && h("div", { className: "react-panel" }, [h("b", null, "Ответ"), h("p", null, complaint.admin_response)]),
+            h("section", { className: "react-panel react-stack" }, [
+                h("h2", null, "Сообщения"),
+                messages.length ? h("div", { className: "react-chat-list" }, messages.map(message => h("div", { key: message.id, className: `react-chat-message${message.sender_id === (user && user.id) ? " own" : ""}` }, [
+                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "Участник"} · ${message.sender_role || ""}`),
+                    h("p", null, message.text),
+                    h("span", { className: "react-muted" }, dateText(message.created_at))
+                ]))) : h("div", { className: "react-empty" }, "Сообщений пока нет."),
+                h("div", { className: "react-actions" }, [
+                    props.can_reply && h("form", { action: `/conversations/${conversation.id}/message`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+                        Textarea({ name: "text", placeholder: "Ответить", className: "wide", rows: 4, required: true, maxLength: 2000 }),
+                        h("button", { className: "react-btn wide", type: "submit" }, "Ответить")
+                    ]),
+                    props.can_transfer && PostButton({ action: `/complaints/admin/${complaint.id}/transfer`, children: "Передать бухгалтеру", className: "react-btn secondary" }),
+                    props.can_status && h("form", { action: `/complaints/status/${complaint.id}`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+                        Select({ name: "status", defaultValue: complaint.status }, ["new", "processing", "in_progress", "waiting_farmer", "sent_to_accountant", "resolved", "rejected", "closed"].map(status => h("option", { value: status }, status))),
+                        Textarea({ name: "response_text", placeholder: "\u0421Р В»РЎС“Р В¶Р ВµР В±Р Р…РЎвЂ№Р в„– \u043aР С•Р СР СР ВµР Р…РЎвЂљР В°РЎР‚Р С‘Р в„–", className: "wide", rows: 3, defaultValue: complaint.admin_response || "" }),
+                        h("button", { className: "react-btn wide", type: "submit" }, "\u0421Р С•РЎвЂ¦РЎР‚Р В°Р Р…Р С‘РЎвЂљРЎРЉ")
+                    ])
+                ])
+            ])
+        ]);
+    }
+    function SellerSupportPage() {
+        const tickets = props.tickets || [];
+        return h("section", { className: "react-panel react-stack" }, [
+            h("div", { className: "react-page-title" }, [
+                h("h1", null, "\u041f\u043eР Т‘Р Т‘Р ВµРЎР‚Р В¶Р С”Р В°"),
+                ButtonLink({ href: "/seller/", className: "secondary" }, "\u041a \u043aР В°Р В±Р С‘Р Р…Р ВµРЎвЂљРЎС“")
+            ]),
+            h("form", { action: "/seller/support/create", method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+                Select({ name: "topic", defaultValue: "other" }, [
+                    h("option", { value: "moderation" }, "\u041c\u043eР Т‘Р ВµРЎР‚Р В°РЎвЂ Р С‘РЎРЏ \u043fРЎР‚Р С•РЎвЂћР С‘Р В»РЎРЏ/\u0442Р С•Р Р†Р В°РЎР‚Р В°"),
+                    h("option", { value: "documents" }, "\u0414Р С•Р С”РЎС“Р СР ВµР Р…РЎвЂљРЎвЂ№ \u043fР С•РЎРѓРЎвЂљР В°Р Р†РЎвЂ°Р С‘Р С”Р В°"),
+                    h("option", { value: "certificates" }, "\u0421Р ВµРЎР‚РЎвЂљР С‘РЎвЂћР С‘Р С”Р В°РЎвЂљРЎвЂ№"),
+                    h("option", { value: "block" }, "\u0411Р В»Р С•Р С”Р С‘РЎР‚Р С•Р Р†Р С”Р В°"),
+                    h("option", { value: "commission" }, "\u041aР С•Р СР С‘РЎРѓРЎРѓР С‘РЎРЏ \u043fР В»Р В°РЎвЂљРЎвЂћР С•РЎР‚Р СРЎвЂ№"),
+                    h("option", { value: "other" }, "\u0414РЎР‚РЎС“Р С–Р С•Р Вµ")
+                ]),
+                Textarea({ name: "text", placeholder: "\u041eР С—Р С‘РЎв‚¬Р С‘РЎвЂљР Вµ Р С•Р В±РЎР‚Р В°РЎвЂ°Р ВµР Р…Р С‘Р Вµ", className: "wide", rows: 4, required: true, minLength: 10, maxLength: 2000 }),
+                h("button", { className: "react-btn wide", type: "submit" }, "\u0421Р С•Р В·Р Т‘Р В°РЎвЂљРЎРЉ \u043eР В±РЎР‚Р В°РЎвЂ°Р ВµР Р…Р С‘Р Вµ")
+            ]),
+            tickets.length ? h("div", { className: "react-stack" }, tickets.map(ticket => h("div", { key: ticket.id, className: "react-card" }, [
+                h("b", null, `#${ticket.id}`),
+                h("p", null, COMPLAINT_CATEGORY_LABELS[ticket.category] || ticket.category || ticket.type),
+                h("p", null, ticket.text),
+                h("div", { className: "react-actions" }, [
+                    ButtonLink({ href: `/conversations/${ticket.conversation_id || ticket.id}`, className: "secondary" }, "\u041eРЎвЂљР С”РЎР‚РЎвЂ№РЎвЂљРЎРЉ")
+                ])
+            ]))) : h("div", { className: "react-empty" }, "\u041eР В±РЎР‚Р В°РЎвЂ°Р ВµР Р…Р С‘Р в„– Р С—Р С•Р С”Р В° Р Р…Р ВµРЎвЂљ.")
+        ]);
+    }
+    function AccountingRequestPage() {
+        const complaint = props.complaint || {};
+        const order = props.order || {};
+        const messages = props.messages || [];
+        return h("section", { className: "react-panel react-stack" }, [
+            h("div", { className: "react-page-title" }, [
+                h("div", null, [
+                    h("h1", null, `\u0424Р С‘Р Р…Р В°Р Р…РЎРѓР С•Р Р†Р С•Р Вµ \u043eР В±РЎР‚Р В°РЎвЂ°Р ВµР Р…Р С‘Р Вµ #${complaint.id || ""}`),
+                    h("p", { className: "react-muted" }, COMPLAINT_CATEGORY_LABELS[complaint.category] || complaint.category || "")
+                ]),
+                ButtonLink({ href: "/accounting/", className: "secondary" }, "\u041a \u0431\u0443\u0445Р С–Р В°Р В»РЎвЂљР ВµРЎР‚Р С‘Р С‘")
+            ]),
+            h("div", { className: "react-info-grid" }, [
+                h("div", { className: "react-card" }, [h("b", null, "\u0421Р С—Р С•РЎРѓР С•Р В±"), h("p", null, complaint.status || "-")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0417Р В°Р С”Р В°Р В·"), h("p", null, orderDisplayNumber(order) || complaint.order_id || "-")]),
+                h("div", { className: "react-card" }, [h("b", null, "\u0421РЎС“Р СР СР В°"), h("p", null, money(order.total_price || 0))]),
+                h("div", { className: "react-card" }, [h("b", null, "\u041aР С•Р СР С‘РЎРѓРЎРѓР С‘РЎРЏ"), h("p", null, money(order.platform_fee || 0))])
+            ]),
+            h("section", { className: "react-panel react-stack" }, [
+                h("h2", null, "Сообщения"),
+                messages.length ? h("div", { className: "react-chat-list" }, messages.map(message => h("div", { key: message.id, className: "react-chat-message" }, [
+                    h("b", null, `${message.sender ? (message.sender.full_name || message.sender.farm_name || message.sender.email) : "Участник"} · ${message.sender_role || ""}`),
+                    h("p", null, message.text),
+                    h("span", { className: "react-muted" }, dateText(message.created_at))
+                ]))) : h("div", { className: "react-empty" }, "Сообщений пока нет."),
+                h("form", { action: `/accounting/requests/${complaint.id}/comment`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+                    Textarea({ name: "text", placeholder: "Комментарий", className: "wide", rows: 3, maxLength: 2000 }),
+                    h("button", { className: "react-btn wide", type: "submit" }, "Добавить комментарий")
+                ]),
+                h("div", { className: "react-actions" }, [
+                    order.id ? PostButton({ action: `/accounting/orders/${order.id}/payout`, children: "Подтвердить выплату" }) : null,
+                    order.id ? PostButton({ action: `/accounting/orders/${order.id}/refund`, children: "Возврат", className: "react-btn danger", confirmMessage: "Инициировать возврат?" }) : null
+                ])
+            ])
+        ]);
+    }
     function ProductTable({ products, seller }) {
         return h("section", { className: "react-panel" }, [
             h("h2", null, "\u0422\u043e\u0432\u0430\u0440\u044b"),
@@ -2041,12 +2173,12 @@
                 rowProps.key = p.id;
                 rowProps.className = `${rowProps.className} stock-row stock-${status}`;
                 return h("tr", rowProps, [
-                h("td", null, A({ href: `/product/${p.id}` }, p.name)),
+                    h("td", null, A({ href: `/product/${p.id}` }, p.name)),
                     h("td", null, h(PriceDisplay, { product: p, compact: true, inline: true })),
-                h("td", null, p.category),
+                    h("td", null, p.category),
                     h("td", null, h("span", { className: `react-stock-pill stock-${status}` }, stockText(p))),
                     h("td", null, productStatusText(p.status)),
-                h("td", null, h("div", { className: "react-actions" }, [
+                    h("td", null, h("div", { className: "react-actions" }, [
                         ButtonLink({ href: productHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c"),
                         seller && A({ href: `/seller/product/edit/${p.id}`, className: "react-btn secondary" }, "\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c"),
                         PostButton({ action: `${seller ? "/seller" : "/admin"}/product/delete/${p.id}`, children: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c", className: "react-btn danger", confirmMessage: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440?" })
@@ -2186,11 +2318,11 @@
                 const items = order.items || [];
                 const goodsTotal = items.reduce((sum, item) => sum + (item.product ? productFinalPrice(item.product) * Number(item.quantity || 0) : 0), 0);
                 const discount = Number(order.discount_amount || 0);
-                const deliveryPrice = deliveryPriceValue(order);
+                const deliveryPrice = deliveryPriceValue(order.delivery_method);
                 const delivery = order.delivery || {};
                 const trackNumber = order.track_number || delivery.track_number;
                 const trackingUrl = delivery.tracking_url || (trackNumber ? `/delivery/track/${trackNumber}` : "");
-                const deliveryProvider = delivery.provider_name || delivery.provider || "";
+                const deliveryProvider = delivery.provider || "";
                 return h("section", { key: order.id, className: "react-panel" }, [
                 h("div", { className: "react-page-title" }, [
                     h("div", null, [h("h2", null, `\u0417\u0430\u043a\u0430\u0437 ${orderDisplayNumber(order)}`), h("p", { className: "react-muted" }, dateText(order.created_at))]),
@@ -2203,7 +2335,7 @@
                 ]),
                 h("div", { className: "react-info-grid react-order-meta-grid" }, [
                     h("div", { className: "react-card" }, [h("b", null, "\u041f\u043e\u043b\u0443\u0447\u0430\u0442\u0435\u043b\u044c"), h("p", null, order.customer_name || "\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d"), h("p", { className: "react-muted" }, order.customer_phone || "")]),
-                    h("div", { className: "react-card" }, [h("b", null, "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"), h("p", null, deliveryMethodText(order.delivery_method) || "\u041d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d\u0430"), h("p", { className: "react-muted" }, order.delivery_address || "\u0421\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437"), order.delivery_slot ? h("p", { className: "react-muted" }, order.delivery_slot) : null, trackNumber ? h("p", { className: "react-muted" }, `\u0422\u0440\u0435\u043a-\u043d\u043e\u043c\u0435\u0440: ${trackNumber}`) : null]),
+                    h("div", { className: "react-card" }, [h("b", null, "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"), h("p", null, deliveryMethodText(order.delivery_method) || "\u041d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d\u0430"), h("p", { className: "react-muted" }, order.delivery_address || "\u0421\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437"), order.delivery_slot ? h("p", { className: "react-muted" }, order.delivery_slot) : null, h("p", { className: "react-muted" }, `\u0422\u0440\u0435\u043a-\u043d\u043e\u043c\u0435\u0440: ${trackNumber || "\u043d\u0435\u0442"}`)]),
                     (deliveryProvider || trackNumber) ? h("div", { className: "react-card react-logistics-card" }, [h("b", null, "Логистика"), h("p", null, deliveryProvider || "Служба доставки"), trackNumber ? h("p", { className: "react-track-number" }, `Трек: ${trackNumber}`) : null, trackNumber ? ButtonLink({ href: trackingUrl, className: "secondary" }, "Отследить") : null]) : null,
                     h("div", { className: "react-card" }, [h("b", null, "\u041e\u043f\u043b\u0430\u0442\u0430"), h("p", null, paymentMethodText(order.selected_payment_method) || "\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u0430"), h("p", { className: "react-muted" }, paymentStatusText(order.payment_status)), order.customer_comment ? h("p", { className: "react-muted" }, order.customer_comment) : null]),
                     h("div", { className: "react-card" }, [h("b", null, "\u0421\u0443\u043c\u043c\u044b"), h("p", null, `\u0422\u043e\u0432\u0430\u0440\u044b: ${money(goodsTotal)}`), discount > 0 ? h("p", { className: "react-muted" }, `\u0421\u043a\u0438\u0434\u043a\u0430: -${money(discount)}`) : null, h("p", { className: "react-muted" }, `\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430: ${money(deliveryPrice)}`), h("p", { className: "react-price" }, `\u0418\u0442\u043e\u0433: ${money(order.total_price)}`)])
@@ -2232,7 +2364,7 @@
     }
     function ProfilePage() {
         const orders = props.orders || [];
-        const activeOrders = orders.filter(order => !["completed", "cancelled", "canceled", "refunded"].includes(order.status || "")).length;
+        const activeOrders = orders.filter(order => !["completed", "canceled", "refunded"].includes(order.status || "")).length;
         return h(React.Fragment, null, [
             h("div", { className: "react-page-title" }, h("h1", null, "\u041b\u0438\u0447\u043d\u044b\u0439 \u043a\u0430\u0431\u0438\u043d\u0435\u0442")),
             props.profile_success && h("div", { className: "react-panel", style: { borderColor: "#2d8a4f", color: "#1f5d35" } }, props.profile_success),
@@ -2265,36 +2397,39 @@
     }
     function SellerStatusActions(order) {
         const status = order.status || "created";
-        const method = order.delivery_method || "pickup";
-        const paid = (order.payment_status || "pending") === "paid";
         const actions = [];
-        if (!paid && ["created", "awaiting_payment", "payment_failed"].includes(status)) {
+        if (["created"].includes(status)) {
+            actions.push({ action: "confirm", label: "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c", className: "react-btn" });
+            actions.push({ action: "assemble", label: "\u041d\u0430\u0447\u0430\u0442\u044c \u0441\u0431\u043e\u0440\u043a\u0443", className: "react-btn secondary" });
             actions.push({ action: "cancel", label: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", className: "react-btn danger", confirmMessage: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437?" });
-        } else if (["paid", "confirmed"].includes(status)) {
+        } else if (["confirmed", "paid"].includes(status)) {
             actions.push({ action: "assemble", label: "\u041d\u0430\u0447\u0430\u0442\u044c \u0441\u0431\u043e\u0440\u043a\u0443", className: "react-btn" });
             actions.push({ action: "cancel", label: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", className: "react-btn danger", confirmMessage: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437?" });
         } else if (status === "assembling") {
-            if (method === "pickup") actions.push({ action: "ready_pickup", label: "\u0413\u043e\u0442\u043e\u0432 \u043a \u0432\u044b\u0434\u0430\u0447\u0435", className: "react-btn" });
-            else if (method === "partner_delivery") actions.push({ action: "transfer_partner", label: "\u041f\u0435\u0440\u0435\u0434\u0430\u0442\u044c \u043f\u0430\u0440\u0442\u043d\u0451\u0440\u0443", className: "react-btn" });
-            else actions.push({ action: "ready_delivery", label: "\u0413\u043e\u0442\u043e\u0432 \u043a \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0435", className: "react-btn" });
+            actions.push({ action: "ship", label: "\u041f\u0435\u0440\u0435\u0434\u0430\u0442\u044c \u0432 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0443", className: "react-btn" });
             actions.push({ action: "cancel", label: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c", className: "react-btn danger", confirmMessage: "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437?" });
-        } else if (status === "ready_for_pickup") {
-            actions.push({ action: "delivered", label: "\u0412\u044b\u0434\u0430\u043d \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044e", className: "react-btn" });
-        } else if (status === "ready_for_delivery") {
-            actions.push({ action: "in_delivery", label: method === "partner_delivery" ? "\u0412 \u043f\u0443\u0442\u0438" : "\u0412 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0435", className: "react-btn" });
-            if (method === "farmer_delivery") actions.push({ action: "delivered", label: "\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d", className: "react-btn secondary" });
-        } else if (status === "in_delivery") {
-            actions.push({ action: "delivered", label: "\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d", className: "react-btn" });
+        } else if (status === "shipped") {
+            actions.push({ action: "deliver", label: "\u041e\u0442\u043c\u0435\u0442\u0438\u0442\u044c \u043a\u0430\u043a \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u0435\u0442\u0441\u044f", className: "react-btn" });
         }
-        if (!actions.length) return !paid && status === "awaiting_payment" ? h("p", { className: "react-muted" }, "\u0417\u0430\u043a\u0430\u0437 \u043e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u043f\u043b\u0430\u0442\u044b. \u041e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0430 \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430 \u043f\u043e\u0441\u043b\u0435 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044f \u043f\u043b\u0430\u0442\u0435\u0436\u0430.") : null;
+        if (!actions.length) return null;
         return h("div", { className: "react-stack" }, [
-            !paid && status === "awaiting_payment" ? h("p", { className: "react-muted" }, "\u0417\u0430\u043a\u0430\u0437 \u043e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u043f\u043b\u0430\u0442\u044b. \u041d\u0430\u0447\u0430\u0442\u044c \u0441\u0431\u043e\u0440\u043a\u0443 \u043f\u043e\u043a\u0430 \u043d\u0435\u043b\u044c\u0437\u044f.") : null,
-            actions.some(item => item.action === "cancel") && h("form", { key: "cancel-form", action: `/seller/orders/${order.id}/status`, method: "post", className: "react-panel react-stack", onSubmit: confirmSubmit("\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437?") }, [
+            actions.some(item => item.action === "cancel") && h("form", {
+                key: "cancel-form",
+                action: `/seller/orders/${order.id}/status`,
+                method: "post",
+                className: "react-panel react-stack",
+                onSubmit: confirmSubmit("\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437?")
+            }, [
                 h("input", { type: "hidden", name: "action", value: "cancel" }),
                 Textarea({ name: "cancel_reason", placeholder: "\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u043e\u0442\u043c\u0435\u043d\u044b \u0434\u043b\u044f \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044f", rows: 3, required: true, minLength: 5, maxLength: 2000 }),
                 h("button", { type: "submit", className: "react-btn danger" }, "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0437\u0430\u043a\u0430\u0437")
             ]),
-            h("div", { key: "actions", className: "react-actions" }, actions.filter(item => item.action !== "cancel").map(item => h("form", { key: item.action, action: `/seller/orders/${order.id}/status`, method: "post", className: "react-inline-form", onSubmit: item.confirmMessage ? confirmSubmit(item.confirmMessage) : handleSubmitOnce }, [h("input", { type: "hidden", name: "action", value: item.action }), h("button", { type: "submit", className: item.className }, item.label)])))
+            h("div", { key: "actions", className: "react-actions" }, actions.filter(item => item.action !== "cancel").map(item =>
+            h("form", { key: item.action, action: `/seller/orders/${order.id}/status`, method: "post", className: "react-inline-form", onSubmit: item.confirmMessage ? confirmSubmit(item.confirmMessage) : handleSubmitOnce }, [
+                h("input", { type: "hidden", name: "action", value: item.action }),
+                h("button", { type: "submit", className: item.className }, item.label)
+            ])
+        ))
         ]);
     }
     function SellerOrdersPage() {
@@ -2308,13 +2443,12 @@
         const filteredOrders = orders.filter(order => statusFilter === "all" ? true : (order.status || "created") === statusFilter);
         const filters = [
             { id: "all", label: "\u0412\u0441\u0435" },
-            { id: "awaiting_payment", label: "\u041e\u0436\u0438\u0434\u0430\u044e\u0442 \u043e\u043f\u043b\u0430\u0442\u044b" },
+            { id: "created", label: "\u041d\u043e\u0432\u044b\u0435" },
             { id: "confirmed", label: "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u043d\u044b\u0435" },
             { id: "assembling", label: "\u0421\u0431\u043e\u0440\u043a\u0430" },
-            { id: "ready_for_pickup", label: "\u0413\u043e\u0442\u043e\u0432\u044b \u043a \u0432\u044b\u0434\u0430\u0447\u0435" },
-            { id: "ready_for_delivery", label: "\u0413\u043e\u0442\u043e\u0432\u044b \u043a \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0435" },
-            { id: "in_delivery", label: "\u0412 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0435" },
-            { id: "cancelled", label: "\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043d\u044b\u0435" }
+            { id: "shipped", label: "\u0412 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0435" },
+            { id: "delivering", label: "\u0412 \u043f\u0443\u0442\u0438" },
+            { id: "canceled", label: "\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043d\u044b\u0435" }
         ];
         return h(React.Fragment, null, [
             h("div", { className: "react-page-title" }, [
@@ -2325,9 +2459,9 @@
             props.seller_order_error && h("div", { className: "react-panel", style: { borderColor: "#d9534f", color: "#8a1f17" } }, props.seller_order_error),
             h("div", { className: "react-stat-grid" }, [
                 h("div", { className: "react-card" }, [h("h2", null, orders.length), h("p", null, "\u0412\u0441\u0435\u0433\u043e \u0437\u0430\u043a\u0430\u0437\u043e\u0432")]),
-                h("div", { className: "react-card" }, [h("h2", null, counts.awaiting_payment || counts.created || 0), h("p", null, "\u041e\u0436\u0438\u0434\u0430\u044e\u0442 \u043e\u043f\u043b\u0430\u0442\u044b")]),
+                h("div", { className: "react-card" }, [h("h2", null, counts.created || 0), h("p", null, "\u041d\u043e\u0432\u044b\u0435")]),
                 h("div", { className: "react-card" }, [h("h2", null, counts.assembling || 0), h("p", null, "\u0421\u043e\u0431\u0438\u0440\u0430\u044e\u0442\u0441\u044f")]),
-                h("div", { className: "react-card" }, [h("h2", null, (counts.ready_for_delivery || 0) + (counts.in_delivery || 0)), h("p", null, "\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u044e\u0442\u0441\u044f")])
+                h("div", { className: "react-card" }, [h("h2", null, counts.delivering || 0), h("p", null, "\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u044e\u0442\u0441\u044f")])
             ]),
             h("div", { className: "react-tab-row" }, filters.map(item => h("button", {
                 key: item.id,
@@ -2635,7 +2769,8 @@
         const tabs = [
             { id: "products", label: "\u0422\u043e\u0432\u0430\u0440\u044b" },
             { id: "users", label: "\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438" },
-            { id: "orders", label: "\u0417\u0430\u043a\u0430\u0437\u044b" }
+            { id: "orders", label: "\u0417\u0430\u043a\u0430\u0437\u044b" },
+            { id: "add", label: "\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440" }
         ];
         return h(React.Fragment, null, [
             h("div", { className: "react-page-title" }, [h("h1", null, "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435")]),
@@ -2649,7 +2784,11 @@
             }, item.label))),
             tab === "products" && h(AdminProductsTable, { products: props.products || [] }),
             tab === "users" && h(AdminUsersTable, { users: props.users || [] }),
-            tab === "orders" && h(AdminOrdersTable, { orders: props.orders || [], orderStatuses: props.order_statuses || [], statusLabels: props.status_labels || {} })
+            tab === "orders" && h(AdminOrdersTable, { orders: props.orders || [], orderStatuses: props.order_statuses || [], statusLabels: props.status_labels || {} }),
+            tab === "add" && h("section", { className: "react-panel" }, [
+                h("h2", null, "\u041d\u043e\u0432\u044b\u0439 \u0442\u043e\u0432\u0430\u0440"),
+                h(ProductForm, { action: "/admin/product/add", admin: true })
+            ])
         ]);
     }
     function ModerationPage() {
@@ -2664,7 +2803,7 @@
                 h("button", { type: "button", className: `react-btn ${tab === "sellers" ? "" : "secondary"}`, onClick: () => setTab("sellers") }, "\u0424\u0435\u0440\u043c\u0435\u0440\u044b")
             ]),
             tab === "products" && h(React.Fragment, null, [
-            h("section", { className: "react-panel" }, [
+                h("section", { className: "react-panel" }, [
                     h("h2", null, "\u0422\u043e\u0432\u0430\u0440\u044b \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435"),
                     pendingProducts.length ? h("table", { className: "react-table" }, [
                         h("thead", null, h("tr", null, [
@@ -2681,7 +2820,7 @@
                             h("td", null, A({ href: productHref }, product.name)),
                             h("td", null, ownerName(product)),
                             h("td", null, h(StatusChip, { value: product.status, label: productStatusText(product.status) })),
-                    h("td", null, h("div", { className: "react-actions" }, [
+                            h("td", null, h("div", { className: "react-actions" }, [
                                 ButtonLink({ href: productHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c"),
                                 PostButton({ action: `/admin/product/approve/${product.id}`, children: "\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c" }),
                                 h("form", { action: `/admin/product/reject/${product.id}`, method: "post", className: "react-inline-form", onSubmit: handleSubmitOnce }, [
@@ -2692,7 +2831,8 @@
                         ]);
                     }))
                     ]) : h("div", { className: "react-empty" }, "\u041d\u0435\u0442 \u0442\u043e\u0432\u0430\u0440\u043e\u0432 \u043d\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0435.")
-                ])
+                ]),
+                h(AdminProductsTable, { products: props.products || [] })
             ]),
             tab === "sellers" && h("section", { className: "react-panel" }, [
                 h("h2", null, "\u0417\u0430\u044f\u0432\u043a\u0438 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432"),
@@ -2837,7 +2977,7 @@
                 h("div", { className: "react-card" }, [h("b", null, "\u0412\u044b\u043f\u043b\u0430\u0442\u0430"), h("div", null, payoutStatusText(order.payout_status || "pending"))])
             ]),
             h("section", { className: "react-panel" }, [
-                h("h2", null, "\u0421остав заказа"),
+                h("h2", null, "\u0421РѕСЃС‚Р°РІ Р·Р°РєР°Р·Р°"),
                 items.length ? h("table", { className: "react-table" }, h("tbody", null, items.map(item => {
                     const product = item.product || {};
                     return h("tr", { key: item.id }, [
@@ -2913,15 +3053,15 @@
                         h("b", null, "\u041e\u0442\u0432\u0435\u0442 \u0430\u0434\u043c\u0438\u043d\u0430"),
                         h("p", null, c.admin_response)
                     ]),
-                    h("div", { className: "react-complaint-card-actions" }, [
-                        ButtonLink({ href: detailHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c"),
-                        isAdminView && c.category === "payment" && PostButton({ action: `/complaints/admin/${c.id}/transfer`, children: "\u041f\u0435\u0440\u0435\u0434\u0430\u0442\u044c \u0431\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0443", className: "react-btn secondary" })
-                    ].filter(Boolean)),
-                    isAdminView && h("form", { action: `/complaints/admin/${c.id}/status`, method: "post", className: "react-complaint-status-form", onSubmit: handleSubmitOnce }, [
+                    h("div", { className: "react-actions" }, [
+                        ButtonLink({ href: detailHref, className: "secondary" }, "\u041e\u0442\u043a\u0440\u044b\u0442\u044c")
+                    ]),
+                    isAdminView && h("form", { action: `/complaints/status/${c.id}`, method: "post", className: "react-complaint-status-form", onSubmit: handleSubmitOnce }, [
                         Select({ name: "status", defaultValue: c.status }, COMPLAINT_STATUS_OPTIONS.map(s => h("option", { value: s }, complaintStatusText(s)))),
                         Textarea({ name: "response_text", placeholder: "\u041e\u0442\u0432\u0435\u0442 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u0430", defaultValue: c.admin_response || "", className: "wide", rows: 4, maxLength: 2000 }),
                         h("div", { className: "react-actions" }, [
-                            h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
+                            h("button", { className: "react-btn", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c"),
+                            c.category === "payment" && PostButton({ action: `/complaints/admin/${c.id}/transfer`, children: "\u041f\u0435\u0440\u0435\u0434\u0430\u0442\u044c \u0431\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0443", className: "react-btn secondary" })
                         ])
                     ])
                 ]);
@@ -3128,7 +3268,7 @@
         const targetUser = props.target_user || {};
         const targetProduct = props.target_product || {};
         const canAdmin = user && (user.role === "admin" || user.role === "manager");
-        const recipientLabel = complaint.assigned_to_role === "accountant" ? "Бухгалтер" : "Администратор";
+        const recipientLabel = complaint.assigned_to_role === "accountant" ? "бухгалтерия" : "поддержка";
         return h("section", { className: "react-complaint-detail react-stack" }, [
             h("div", { className: "react-page-title" }, [
                 h("div", null, [
@@ -3169,7 +3309,7 @@
                         h("button", { className: "react-btn wide", type: "submit" }, "\u041e\u0442\u0432\u0435\u0442\u0438\u0442\u044c")
                     ]),
                     props.can_transfer && PostButton({ action: `/complaints/admin/${complaint.id}/transfer`, children: "\u041f\u0435\u0440\u0435\u0434\u0430\u0442\u044c \u0431\u0443\u0445\u0433\u0430\u043b\u0442\u0435\u0440\u0443", className: "react-btn secondary" }),
-                    props.can_status && h("form", { action: `/complaints/admin/${complaint.id}/status`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
+                    props.can_status && h("form", { action: `/complaints/status/${complaint.id}`, method: "post", className: "react-form-grid", onSubmit: handleSubmitOnce }, [
                         Select({ name: "status", defaultValue: complaint.status }, COMPLAINT_STATUS_OPTIONS.map(status => h("option", { value: status }, complaintStatusText(status)))),
                         Textarea({ name: "response_text", placeholder: "\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 \u043a\u043e\u043c\u043c\u0435\u043d\u0442\u0430\u0440\u0438\u0439", className: "wide", rows: 3, defaultValue: complaint.admin_response || "" }),
                         h("button", { className: "react-btn wide", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c")
@@ -3291,109 +3431,20 @@
         ]);
     }
     function StaticPage() {
-        const simplePages = {
-            seller_pending: ["\u0417\u0430\u044f\u0432\u043a\u0430 \u043d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438", "\u0410\u0434\u043c\u0438\u043d \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 \u0430\u043d\u043a\u0435\u0442\u0443 \u0444\u0435\u0440\u043c\u0435\u0440\u0430. \u041f\u043e\u0441\u043b\u0435 \u043e\u0434\u043e\u0431\u0440\u0435\u043d\u0438\u044f \u0432\u044b \u0441\u043c\u043e\u0436\u0435\u0442\u0435 \u0432\u043e\u0439\u0442\u0438 \u0438 \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u043a\u0430\u0431\u0438\u043d\u0435\u0442 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430."],
+        const content = {
+            about: ["\u041e \u043d\u0430\u0441", "\u041c\u044b \u0441\u043e\u0431\u0438\u0440\u0430\u0435\u043c \u0444\u0435\u0440\u043c\u0435\u0440\u0441\u043a\u0438\u0435 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u044b \u043d\u0430 \u043e\u0434\u043d\u043e\u0439 \u043f\u043b\u043e\u0449\u0430\u0434\u043a\u0435: \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u044f\u043c \u043f\u0440\u043e\u0449\u0435 \u0432\u044b\u0431\u0438\u0440\u0430\u0442\u044c, \u0430 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430\u043c \u043f\u0440\u043e\u0449\u0435 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u044c \u0441\u0432\u043e\u0438\u0445 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432.", "\u041a\u043e\u043d\u0442\u0430\u043a\u0442\u044b: 8-906-440-29-35"],
+            delivery: ["\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430", "\u041a\u0443\u0440\u044c\u0435\u0440, \u0441\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437 \u0438 \u043f\u043e\u0447\u0442\u043e\u0432\u0430\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430. \u0414\u0430\u0442\u0430 \u0438 \u0441\u043f\u043e\u0441\u043e\u0431 \u0443\u0442\u043e\u0447\u043d\u044f\u044e\u0442\u0441\u044f \u043f\u0440\u0438 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0438 \u0437\u0430\u043a\u0430\u0437\u0430."],
+            business: ["\u0414\u043b\u044f \u0431\u0438\u0437\u043d\u0435\u0441\u0430", "\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0444\u0435\u0440\u043c\u0435\u0440\u0441\u043a\u0438\u0445 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u043e\u0432 \u0434\u043b\u044f \u043a\u0430\u0444\u0435, \u043e\u0444\u0438\u0441\u043e\u0432 \u0438 \u043d\u0435\u0431\u043e\u043b\u044c\u0448\u0438\u0445 \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432.", "\u0421\u0442\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u043c"],
+            reviews: ["\u041e\u0442\u0437\u044b\u0432\u044b", "\u041f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u0438 \u043c\u043e\u0433\u0443\u0442 \u043e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u043e\u0442\u0437\u044b\u0432 \u043f\u043e\u0441\u043b\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043d\u043e\u0433\u043e \u0437\u0430\u043a\u0430\u0437\u0430. \u041e\u0442\u0437\u044b\u0432\u044b \u043f\u0440\u043e\u0445\u043e\u0434\u044f\u0442 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u044e."],
+            recipes: ["\u0420\u0435\u0446\u0435\u043f\u0442\u044b", "\u0418\u0434\u0435\u0438 \u0434\u043b\u044f \u0441\u0435\u0437\u043e\u043d\u043d\u044b\u0445 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u043e\u0432: \u0437\u0430\u043f\u0435\u0447\u0435\u043d\u043d\u044b\u0435 \u043e\u0432\u043e\u0449\u0438, \u044f\u0433\u043e\u0434\u043d\u044b\u0435 \u0437\u0430\u0432\u0442\u0440\u0430\u043a\u0438, \u0434\u043e\u043c\u0430\u0448\u043d\u0438\u0435 \u0437\u0430\u0433\u043e\u0442\u043e\u0432\u043a\u0438 \u0438 \u0444\u0435\u0440\u043c\u0435\u0440\u0441\u043a\u0438\u0435 \u0441\u044b\u0440\u044b."],
+            quality: ["\u0413\u0430\u0440\u0430\u043d\u0442\u0438\u044f \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u0430", "\u041c\u044b \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u043c \u0441\u0435\u0440\u0442\u0438\u0444\u0438\u043a\u0430\u0442\u044b, \u043f\u0440\u043e\u0438\u0441\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u043e\u0432 \u0438 \u0441\u0442\u0430\u0442\u0443\u0441 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430."],
+            blog: ["\u0411\u043b\u043e\u0433", "\u041d\u043e\u0432\u043e\u0441\u0442\u0438 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u0432, \u0441\u0435\u0437\u043e\u043d\u043d\u044b\u0435 \u043f\u043e\u0434\u0431\u043e\u0440\u043a\u0438 \u0438 \u0437\u0430\u043c\u0435\u0442\u043a\u0438 \u043e \u043f\u0440\u043e\u0434\u0443\u043a\u0442\u0430\u0445."],
+            bonus: ["\u0411\u043e\u043d\u0443\u0441\u043d\u0430\u044f \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0430", "\u0421\u043a\u0438\u0434\u043a\u0438 \u0438 \u043f\u0440\u043e\u043c\u043e\u043a\u043e\u0434\u044b \u0434\u043b\u044f \u043f\u043e\u0441\u0442\u043e\u044f\u043d\u043d\u044b\u0445 \u043f\u043e\u043a\u0443\u043f\u0430\u0442\u0435\u043b\u0435\u0439."],
+            seller_pending: ["\u0417\u0430\u044f\u0432\u043a\u0430 \u043d\u0430 \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0438", "\u0410\u0434\u043c\u0438\u043d \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 \u0430\u043d\u043a\u0435\u0442\u0443 \u0444\u0435\u0440\u043c\u0435\u0440\u0430. \u041f\u043e\u0441\u043b\u0435 \u043e\u0434\u043e\u0431\u0440\u0435\u043d\u0438\u044f \u0432\u044b \u0441\u043c\u043e\u0436\u0435\u0442\u0435 \u0432\u0445\u043e\u0434\u0438\u0442\u044c \u0447\u0435\u0440\u0435\u0437 \u043e\u0431\u044b\u0447\u043d\u043e\u0435 \u043e\u043a\u043d\u043e \u0430\u0432\u0442\u043e\u0440\u0438\u0437\u0430\u0446\u0438\u0438 \u0438 \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u043a\u0430\u0431\u0438\u043d\u0435\u0442 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430."],
             verify_email_sent: ["\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u0435 email", "\u0421\u0441\u044b\u043b\u043a\u0430 \u0434\u043b\u044f \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044f \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430 \u043d\u0438\u0436\u0435."],
             verify_email_result: [props.success ? "Email \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d" : "\u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u044f", props.message || ""]
-        };
-        const Head = (title, lead, kicker) => h("section", { className: "react-static-head" }, [
-            kicker ? h("span", { className: "react-static-kicker" }, kicker) : null,
-            h("h1", null, title),
-            lead ? h("p", null, lead) : null
-        ]);
-        const List = (items, ordered) => h(ordered ? "ol" : "ul", { className: "react-static-list" }, items.map(item => h("li", { key: item }, item)));
-        const Cards = (items, className) => h("section", { className: `react-static-grid ${className || ""}` }, items.map(item =>
-            h("article", { key: item[0], className: "react-card react-static-card" }, [
-                h("h2", null, item[0]),
-                h("p", null, item[1])
-            ])
-        ));
-        const pages = {
-            about: () => h("div", { className: "react-static-page react-static-about" }, [
-                Head("О сервисе «Свои Ряды»", "Это площадка для покупки фермерских продуктов напрямую у локальных продавцов. Покупатель видит, кто продает товар, что есть в наличии, как оформить заказ и где отслеживать доставку.", "О нас"),
-                h("section", { className: "react-static-split" }, [
-                    h("article", { className: "react-panel react-static-section" }, [
-                        h("h2", null, "Что здесь главное"),
-                        List(["Каталог состоит из товаров, которые прошли проверку и доступны к покупке.", "В карточке товара важны не лозунги, а цена, остаток, продавец, рейтинг и условия получения.", "После заказа покупатель может видеть статус, оплату, доставку и переписку по заказу в одном месте."])
-                    ]),
-                    h("aside", { className: "react-static-aside" }, [
-                        h("b", null, "Принцип сервиса"),
-                        h("p", null, "Меньше посредников и лишних обещаний. Больше понятной информации о продукте, продавце и заказе.")
-                    ])
-                ]),
-                Cards([["Покупателям", "Быстрый поиск по продуктам, избранное, корзина, история заказов и отзывы после покупки."], ["Фермерам", "Заявка на подключение, личный кабинет продавца, управление товарами, заказами и документами."], ["Команде сервиса", "Модерация заявок, товаров и отзывов, поддержка клиентов, контроль спорных ситуаций."]])
-            ]),
-            delivery: () => h("div", { className: "react-static-page react-static-delivery" }, [
-                Head("Доставка и самовывоз", "Способ получения выбирается при оформлении заказа. Итоговая сумма показывается до подтверждения, отдельно по товарам и доставке.", "Доставка"),
-                h("section", { className: "react-static-price-list" }, [
-                    h("article", null, [h("span", null, "Самовывоз"), h("b", null, "0 руб."), h("p", null, "Подходит, если заказ удобно забрать самостоятельно у продавца или из согласованной точки.")]),
-                    h("article", null, [h("span", null, "Курьер"), h("b", null, "500 руб."), h("p", null, "Адрес, дата и интервал указываются в корзине. Стоимость добавляется к итоговой сумме заказа.")]),
-                    h("article", null, [h("span", null, "Трекинг"), h("b", null, "после сборки"), h("p", null, "Когда заказ передан в доставку, появляется трек-номер и страница отслеживания.")])
-                ]),
-                h("section", { className: "react-panel react-static-section" }, [
-                    h("h2", null, "Как проходит заказ"),
-                    List(["Вы выбираете товары и способ получения в корзине.", "Продавец подтверждает заказ и собирает продукты.", "После передачи в доставку статус меняется, а у заказа появляется трек или пометка о самовывозе.", "Если что-то не сходится по адресу, оплате или качеству, можно написать в поддержку."], true)
-                ]),
-                h("section", { className: "react-static-note" }, [
-                    h("b", null, "Важно"),
-                    h("p", null, "Скоропортящиеся продукты лучше заказывать на ближайший удобный слот. Если заказ собирают несколько продавцов, условия получения могут отличаться.")
-                ])
-            ]),
-            business: () => h("div", { className: "react-static-page react-static-business" }, [
-                Head("Поставки для кафе, офисов и небольших магазинов", "Раздел для тех, кто покупает продукты не разово, а регулярно: на кухню, в офис или для локальной витрины.", "Для бизнеса"),
-                Cards([["Кафе и кухни", "Овощи, молочные продукты, яйца, хлеб, мед, мясо и сезонные позиции от локальных продавцов."], ["Офисы", "Фрукты, выпечка, молочные продукты и наборы к чаю для регулярных закупок."], ["Небольшие магазины", "Проверенные товары с описанием, остатками, сертификатами и данными продавца."]], "react-static-grid-wide"),
-                h("section", { className: "react-static-split" }, [
-                    h("article", { className: "react-panel react-static-section" }, [
-                        h("h2", null, "Что стоит согласовать заранее"),
-                        List(["Периодичность поставок и минимальную сумму заказа.", "Нужные категории, объемы и сезонные замены.", "Документы, сертификаты и удобный формат оплаты."])
-                    ]),
-                    h("aside", { className: "react-static-aside" }, [
-                        h("b", null, "Связь"),
-                        h("p", null, "Для регулярных закупок проще начать с каталога, а детали согласовать с продавцом или поддержкой."),
-                        ButtonLink({ href: "/catalog" }, "Открыть каталог")
-                    ])
-                ])
-            ]),
-            reviews: () => h("div", { className: "react-static-page react-static-compact" }, [
-                Head("Отзывы", "Отзывы помогают выбирать продукты и продавцов без догадок. Оставить оценку можно после завершенного заказа.", "Клиентам"),
-                h("section", { className: "react-panel react-static-section" }, [
-                    h("h2", null, "Как это работает"),
-                    List(["Покупатель оценивает товар: качество, свежесть, соответствие описанию.", "Отдельно можно оценить продавца: сборку заказа, общение и передачу.", "Отзывы проходят модерацию, чтобы убрать спам, оскорбления и нерелевантные сообщения.", "Рейтинг появляется в карточках товаров и помогает другим покупателям быстрее принимать решение."], true)
-                ])
-            ]),
-            quality: () => h("div", { className: "react-static-page react-static-compact" }, [
-                Head("Качество товаров", "На площадке важны проверяемые признаки: описание, документы, остаток, срок годности, отзывы и история продавца.", "Качество"),
-                Cards([["Документы", "Продавец может добавить сертификаты и сведения о происхождении товара."], ["Модерация", "Новые товары и изменения проходят проверку перед публикацией."], ["Обратная связь", "Если товар приехал не таким, как ожидалось, покупатель может оставить отзыв или обращение в поддержку."]], "react-static-grid-wide"),
-                h("section", { className: "react-static-note" }, [
-                    h("b", null, "Что смотреть в карточке"),
-                    h("p", null, "Цена, единица измерения, остаток, описание, продавец, рейтинг, срок годности и наличие сертификата.")
-                ])
-            ]),
-            bonus: () => h("div", { className: "react-static-page react-static-compact" }, [
-                Head("Бонусы и скидки", "Скидки показываются там, где они реально влияют на заказ: в карточке товара, каталоге и корзине.", "Бонусы"),
-                h("section", { className: "react-panel react-static-section" }, [
-                    h("h2", null, "Что может уменьшить сумму"),
-                    List(["Скидочная цена на конкретный товар.", "Промокод, если он активен и подходит к условиям заказа.", "Итоговая сумма в корзине с учетом доставки и скидок."])
-                ]),
-                h("section", { className: "react-static-note" }, [h("p", null, "Если промокод не применяется, проверьте срок действия, минимальную сумму и товары в корзине.")])
-            ]),
-            recipes: () => h("div", { className: "react-static-page react-static-compact" }, [
-                Head("Рецепты", "Здесь будут короткие подборки под сезонные продукты: без длинных статей, с понятным списком ингредиентов и ссылками на каталог.", "Рецепты"),
-                Cards([["Овощи", "Салаты, рагу, запеканки и заготовки."], ["Фрукты и ягоды", "Завтраки, морсы, пироги и джемы."], ["Сыр, хлеб и молочные продукты", "Быстрые закуски и простые домашние ужины."]], "react-static-grid-wide")
-            ]),
-            blog: () => h("div", { className: "react-static-page react-static-compact" }, [
-                Head("Блог", "Раздел для новостей сервиса, сезонных заметок и историй поставщиков. Пока он работает как аккуратная навигационная страница.", "Блог"),
-                h("section", { className: "react-panel react-static-section" }, [
-                    h("h2", null, "Что здесь уместно"),
-                    List(["Короткие новости о новых продавцах и категориях.", "Сезонные подсказки: что сейчас свежее и выгоднее брать.", "Практичные заметки о хранении, выборе и приготовлении продуктов."])
-                ])
-            ])
-        };
-        if (!pages[page]) {
-            const content = simplePages[page] || ["\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430", "\u0420\u0430\u0437\u0434\u0435\u043b \u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0435\u043d \u043d\u0430 React."];
-            return h("section", { className: "react-panel" }, [h("h1", null, content[0]), content.slice(1).map((p, i) => h("p", { key: i }, p)), props.verification_link && ButtonLink({ href: props.verification_link }, "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c email"), h("div", { style: { marginTop: 18 } }, ButtonLink({ href: "/", className: "secondary" }, "\u041d\u0430 \u0433\u043b\u0430\u0432\u043d\u0443\u044e"))]);
-        }
-        return pages[page]();
+        }[page] || ["\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u0430", "\u0420\u0430\u0437\u0434\u0435\u043b \u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0435\u043d \u043d\u0430 React."];
+        return h("section", { className: "react-panel" }, [h("h1", null, content[0]), content.slice(1).map((p, i) => h("p", { key: i }, p)), props.verification_link && ButtonLink({ href: props.verification_link }, "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c email"), h("div", { style: { marginTop: 18 } }, ButtonLink({ href: "/", className: "secondary" }, "\u041d\u0430 \u0433\u043b\u0430\u0432\u043d\u0443\u044e"))]);
     }
     function GenericPage() {
         return h("section", { className: "react-panel" }, [h("h1", null, "\u0420\u0430\u0437\u0434\u0435\u043b"), h("p", null, "\u0418\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u0447\u0435\u0440\u0435\u0437 \u043e\u0431\u0449\u0438\u0439 React-\u043a\u043e\u043c\u043f\u043e\u043d\u0435\u043d\u0442."), h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: 320, overflow: "auto" } }, JSON.stringify(props, null, 2))]);
@@ -3571,3 +3622,4 @@
         hydrateFavoriteButtons();
     }, 0);
 })();
+

@@ -1,6 +1,5 @@
-﻿from datetime import datetime
+from datetime import datetime
 from decimal import Decimal
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -10,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth import check_role, get_optional_user
 from database import get_db
+from email_utils import send_email, smtp_is_configured
 from marketplace_utils import (
     MIN_ORDER_AMOUNT,
     effective_product_price,
@@ -43,9 +43,11 @@ from order_statuses import (
 
 router = APIRouter(prefix="/order", tags=["order"])
 
-DELIVERY_PRICES = {
-    "courier": 500,
-    "pickup": 0,
+DELIVERY_METHODS = {"pickup", "farmer_delivery", "partner_delivery"}
+LEGACY_DELIVERY_METHOD_MAP = {
+    "courier": "farmer_delivery",
+    "post": "partner_delivery",
+    "market": "pickup",
 }
 PAY_NOW_METHODS = set()
 PAYMENT_METHODS = {"yookassa"}
@@ -64,10 +66,12 @@ def _clear_checkout_form(request: Request) -> None:
 
 def _delivery_label(method: str) -> str:
     return {
-        "courier": "Курьер",
+        "farmer_delivery": "Доставка фермером",
+        "partner_delivery": "Партнёрская доставка",
+        "courier": "Доставка фермером",
         "pickup": "Самовывоз",
-        "post": "Пункт выдачи",
-        "market": "Выдача на рынке",
+        "post": "Партнёрская доставка",
+        "market": "Самовывоз",
     }.get(method, method)
 
 
@@ -79,6 +83,81 @@ def _payment_label(method: str) -> str:
 
 def _make_order_number() -> str:
     return f"FM-{datetime.utcnow():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+
+
+def _normalize_delivery_method(method: str | None) -> str:
+    value = (method or "pickup").strip()
+    return LEGACY_DELIVERY_METHOD_MAP.get(value, value)
+
+
+def _seller_slots(seller: User | None) -> list[str]:
+    raw = (getattr(seller, "delivery_slots", None) or "10-14,14-18,18-22").strip()
+    slots = [slot.strip() for slot in raw.replace(";", ",").split(",") if slot.strip() in DELIVERY_SLOTS]
+    return slots or list(DELIVERY_SLOTS)
+
+
+def _seller_minimum(seller: User | None, method: str | None = None) -> Decimal:
+    base = max(Decimal(str((seller.min_order_amount if seller else 0) or 0)), MIN_ORDER_AMOUNT)
+    if method == "farmer_delivery" and seller:
+        delivery_min = Decimal(str(seller.farmer_delivery_min_order or 0))
+        return max(base, delivery_min)
+    return base
+
+
+def _seller_delivery_options(seller: User | None) -> list[dict[str, object]]:
+    if not seller:
+        return []
+    options: list[dict[str, object]] = []
+    if int(seller.pickup_enabled or 0):
+        options.append({
+            "method": "pickup",
+            "label": "Самовывоз",
+            "fee": 0.0,
+            "requires_address": False,
+            "address": seller.pickup_address or seller.farm_address or "",
+            "comment": seller.pickup_comment or "",
+        })
+    if int(seller.farmer_delivery_enabled or 0):
+        options.append({
+            "method": "farmer_delivery",
+            "label": "Доставка фермером",
+            "fee": float(seller.farmer_delivery_fee or 0),
+            "requires_address": True,
+            "min_order": float(_seller_minimum(seller, "farmer_delivery")),
+            "comment": seller.farmer_delivery_comment or "",
+        })
+    if int(seller.partner_delivery_enabled or 0):
+        options.append({
+            "method": "partner_delivery",
+            "label": "Партнёрская доставка",
+            "fee": float(seller.partner_delivery_fee or 0),
+            "requires_address": True,
+            "comment": seller.partner_delivery_comment or "В учебной версии используется демонстрационный режим без подключения реального API",
+        })
+    return options
+
+
+def _delivery_option(seller: User | None, method: str) -> dict[str, object] | None:
+    for option in _seller_delivery_options(seller):
+        if option["method"] == method:
+            return option
+    return None
+
+
+def _demo_track_number(order_id: int) -> str:
+    return f"FD-{datetime.utcnow():%Y}-{order_id:06d}"
+
+
+def _set_order_paid(order: Order, payment_id: str | None = None) -> None:
+    amount = Decimal(order.total_price or 0)
+    order.payment_status = "paid"
+    order.status = "confirmed"
+    order.escrow_status = "pending"
+    order.payment_id = payment_id or order.payment_id
+    order.payment_amount = amount
+    order.paid_at = datetime.utcnow()
+    if order.delivery:
+        order.delivery.status = "waiting_assembly"
 
 
 def _reserve_stock(cart_items: list[CartItem], db: Session) -> tuple[bool, str]:
@@ -162,43 +241,35 @@ def _charge_order(order: Order, user: User, db: Session, payment_method: str) ->
             external_id=f"ext_{order.id}_{user.id}",
         ))
 
-    order.payment_status = "paid"
-    order.status = "paid"
-    order.escrow_status = "pending"
+    _set_order_paid(order, f"demo_{payment_method}_{order.id}")
     return True, ""
 
 
 @router.post("/create")
-def order_create(
-    request: Request,
-    full_name: str = Form(""),
-    phone: str = Form(""),
-    address: str = Form(""),
-    delivery_method: str = Form("courier"),
-    delivery_date: str = Form(""),
-    delivery_slot_choice: str = Form("10-14"),
-    comment: str = Form(""),
-    payment_method: str = Form("yookassa"),
-    coupon_code: str = Form(""),
-    seller_id: str = Form(""),
-    db: Session = Depends(get_db),
-):
+async def order_create(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
         return guard
 
+    if not user.email_verified:
+        request.session["cart_error"] = (
+            "Подтвердите email, чтобы оформить заказ. Ссылка для подтверждения отправлена на почту при регистрации."
+        )
+        return RedirectResponse(url="/cart/", status_code=303)
+
+    form = await request.form()
     checkout_form = {
-        "full_name": (full_name or "").strip(),
-        "phone": (phone or "").strip(),
-        "address": (address or "").strip(),
-        "delivery_method": (delivery_method or "").strip(),
-        "delivery_date": (delivery_date or "").strip(),
-        "delivery_slot_choice": (delivery_slot_choice or "").strip(),
-        "comment": (comment or "").strip(),
-        "payment_method": (payment_method or "").strip(),
-        "coupon_code": (coupon_code or "").strip(),
-        "seller_id": (seller_id or "").strip(),
+        "full_name": (form.get("full_name") or "").strip(),
+        "phone": (form.get("phone") or "").strip(),
+        "address": (form.get("address") or "").strip(),
+        "delivery_method": (form.get("delivery_method") or "").strip(),
+        "delivery_date": (form.get("delivery_date") or "").strip(),
+        "delivery_slot_choice": (form.get("delivery_slot_choice") or "").strip(),
+        "comment": (form.get("comment") or "").strip(),
+        "payment_method": (form.get("payment_method") or "yookassa").strip(),
+        "coupon_code": (form.get("coupon_code") or "").strip(),
+        "seller_id": (form.get("seller_id") or "").strip(),
     }
 
     # Backward compatibility for the old one-click checkout button.
@@ -228,10 +299,16 @@ def order_create(
         checkout_form["delivery_slot_choice"] = delivery_slot_value
         checkout_form["payment_method"] = "yookassa"
 
-    delivery_method = checkout_form["delivery_method"]
+    delivery_method = _normalize_delivery_method(checkout_form["delivery_method"])
+    if not delivery_method:
+        delivery_method = "pickup"
+    checkout_form["delivery_method"] = delivery_method
     payment_method = checkout_form["payment_method"]
-    delivery_slot_choice = checkout_form["delivery_slot_choice"]
+    delivery_slot_choice = checkout_form["delivery_slot_choice"] or next(iter(DELIVERY_SLOTS))
     coupon_code = checkout_form["coupon_code"]
+    delivery_date = checkout_form["delivery_date"] or datetime.now().strftime("%Y-%m-%d")
+    checkout_form["delivery_slot_choice"] = delivery_slot_choice
+    checkout_form["delivery_date"] = delivery_date
 
     _store_checkout_form(request, checkout_form)
 
@@ -239,7 +316,7 @@ def order_create(
         request.session["cart_error"] = "Укажите имя и телефон получателя."
         return RedirectResponse(url="/cart/", status_code=303)
 
-    if delivery_method not in DELIVERY_PRICES:
+    if delivery_method not in DELIVERY_METHODS:
         request.session["cart_error"] = "Выберите корректный способ получения."
         return RedirectResponse(url="/cart/", status_code=303)
 
@@ -249,10 +326,6 @@ def order_create(
 
     if delivery_slot_choice not in DELIVERY_SLOTS:
         request.session["cart_error"] = "Выберите корректный слот доставки."
-        return RedirectResponse(url="/cart/", status_code=303)
-
-    if delivery_method != "pickup" and not checkout_form["address"]:
-        request.session["cart_error"] = "Для выбранного способа доставки нужен адрес."
         return RedirectResponse(url="/cart/", status_code=303)
 
     cart_items = (
@@ -283,38 +356,63 @@ def order_create(
             request.session["cart_error"] = "В корзине нет товаров выбранного продавца."
             return RedirectResponse(url="/cart/", status_code=303)
 
-    subtotal = Decimal("0")
-    seller_ids = set()
-    seller_subtotals: dict[int | None, Decimal] = {}
-    seller_minimums: dict[int | None, Decimal] = {}
+    seller_groups: dict[int | None, list[CartItem]] = {}
     for item in cart_items:
         product = item.product
         if not product or product.status != "approved":
             request.session["cart_error"] = "Один из товаров больше недоступен."
             return RedirectResponse(url="/cart/", status_code=303)
-        seller_id = product.owner_id
-        seller_ids.add(seller_id)
-        item_total = Decimal(effective_product_price(product)) * item.quantity
-        subtotal += item_total
-        seller_subtotals[seller_id] = seller_subtotals.get(seller_id, Decimal("0")) + item_total
-        seller_minimums[seller_id] = max(
-            Decimal(str((product.owner.min_order_amount if product.owner else 0) or 0)),
-            MIN_ORDER_AMOUNT,
-        )
+        seller_groups.setdefault(product.owner_id, []).append(item)
 
-    if len(seller_ids) > 1 and not has_seller_filter:
-        request.session["cart_error"] = "В одном заказе пока можно оформить товары только одного продавца. Оставьте в корзине позиции одного фермера и оформите заказ."
+    if not seller_groups:
+        request.session["cart_error"] = "Корзина пуста."
         return RedirectResponse(url="/cart/", status_code=303)
 
-    for seller_id, seller_subtotal in seller_subtotals.items():
-        seller_minimum = seller_minimums.get(seller_id, MIN_ORDER_AMOUNT)
-        if minimum_order_shortage(seller_subtotal, seller_minimum) > 0:
-            request.session["cart_error"] = minimum_order_message(seller_subtotal, seller_minimum)
+    group_payloads: list[dict[str, object]] = []
+    subtotal = Decimal("0")
+    for seller_id, group_items in seller_groups.items():
+        seller = group_items[0].product.owner if group_items and group_items[0].product else None
+        if not seller or not _seller_delivery_options(seller):
+            request.session["cart_error"] = "У одного из фермеров не настроен ни один способ получения."
             return RedirectResponse(url="/cart/", status_code=303)
 
-    if minimum_order_shortage(subtotal, MIN_ORDER_AMOUNT) > 0:
-        request.session["cart_error"] = minimum_order_message(subtotal, MIN_ORDER_AMOUNT)
-        return RedirectResponse(url="/cart/", status_code=303)
+        key = "__none__" if seller_id is None else str(seller_id)
+        selected_method = _normalize_delivery_method(form.get(f"delivery_method_{key}") or delivery_method)
+        option = _delivery_option(seller, selected_method)
+        if not option:
+            request.session["cart_error"] = f"{seller.farm_name or seller.full_name or 'Фермер'} не поддерживает выбранный способ получения."
+            return RedirectResponse(url="/cart/", status_code=303)
+
+        selected_date = (form.get(f"delivery_date_{key}") or delivery_date).strip()
+        selected_slot = (form.get(f"delivery_slot_choice_{key}") or delivery_slot_choice).strip()
+        selected_address = (form.get(f"address_{key}") or checkout_form["address"]).strip()
+        selected_comment = (form.get(f"comment_{key}") or checkout_form["comment"]).strip()
+
+        if selected_slot not in _seller_slots(seller):
+            request.session["cart_error"] = "Выберите доступный временной слот."
+            return RedirectResponse(url="/cart/", status_code=303)
+        if bool(option.get("requires_address")) and not selected_address:
+            request.session["cart_error"] = "Для доставки нужен адрес."
+            return RedirectResponse(url="/cart/", status_code=303)
+
+        group_subtotal = sum(Decimal(effective_product_price(i.product)) * int(i.quantity or 0) for i in group_items if i.product)
+        seller_minimum = _seller_minimum(seller, selected_method)
+        if minimum_order_shortage(group_subtotal, seller_minimum) > 0:
+            request.session["cart_error"] = minimum_order_message(group_subtotal, seller_minimum)
+            return RedirectResponse(url="/cart/", status_code=303)
+        subtotal += group_subtotal
+        group_payloads.append({
+            "seller_id": seller_id,
+            "seller": seller,
+            "items": group_items,
+            "method": selected_method,
+            "date": selected_date,
+            "slot": selected_slot,
+            "address": selected_address,
+            "comment": selected_comment,
+            "delivery_fee": Decimal(str(option.get("fee") or 0)),
+            "subtotal": group_subtotal,
+        })
 
     coupon = None
     discount_amount = Decimal("0")
@@ -323,41 +421,42 @@ def order_create(
             Coupon.code == coupon_code.upper().strip(),
             Coupon.is_active == 1,
         ).first()
-        if not coupon or subtotal < Decimal(coupon.min_order or 0):
-            request.session["cart_error"] = "Промокод не найден или не подходит для этой суммы заказа."
+        now_dt = datetime.now()
+        coupon_valid = bool(coupon) and (
+            (coupon.valid_from is None or coupon.valid_from <= now_dt)
+            and (coupon.valid_to is None or coupon.valid_to >= now_dt)
+        )
+        if not coupon_valid or subtotal < Decimal(coupon.min_order or 0):
+            request.session["cart_error"] = "Промокод не найден, истёк или не подходит для этой суммы заказа."
             db.rollback()
             return RedirectResponse(url="/cart/", status_code=303)
         discount_amount = (subtotal * Decimal(coupon.discount_percent) / Decimal("100")).quantize(Decimal("0.01"))
         coupon.usage_count += 1
 
-    parsed_date = None
-    if delivery_date:
-        try:
-            parsed_date = datetime.strptime(delivery_date, "%Y-%m-%d")
-        except ValueError:
-            parsed_date = None
-    if not parsed_date:
-        request.session["cart_error"] = "Выберите корректную дату доставки."
-        return RedirectResponse(url="/cart/", status_code=303)
-
     now = datetime.now()
     today = now.date()
-    if parsed_date.date() < today:
-        request.session["cart_error"] = "Нельзя выбрать дату в прошлом."
-        return RedirectResponse(url="/cart/", status_code=303)
-    slot_start, slot_end = DELIVERY_SLOTS[delivery_slot_choice]
-    if parsed_date.date() == today:
-        end_hour = int(slot_end.split(":")[0])
-        if now.hour >= end_hour:
+    for group in group_payloads:
+        parsed_date = None
+        if group["date"]:
+            try:
+                parsed_date = datetime.strptime(str(group["date"]), "%Y-%m-%d")
+            except ValueError:
+                parsed_date = None
+        if not parsed_date:
+            request.session["cart_error"] = "Выберите корректную дату получения или доставки."
+            return RedirectResponse(url="/cart/", status_code=303)
+        if parsed_date.date() < today:
+            request.session["cart_error"] = "Нельзя выбрать дату в прошлом."
+            return RedirectResponse(url="/cart/", status_code=303)
+        slot_start, slot_end = DELIVERY_SLOTS[str(group["slot"])]
+        if parsed_date.date() == today and now.hour >= int(slot_end.split(":")[0]):
             request.session["cart_error"] = "Выбранный слот уже прошёл. Выберите следующий."
             return RedirectResponse(url="/cart/", status_code=303)
+        group["parsed_date"] = parsed_date
+        group["delivery_slot"] = f"{group['date']} {slot_start}-{slot_end}"
 
-    delivery_price = Decimal(str(DELIVERY_PRICES[delivery_method]))
     goods_total = subtotal - discount_amount
-    total_price = goods_total + delivery_price
     commission_percent = platform_commission_percent(db)
-    platform_fee = (goods_total * commission_percent / Decimal("100")).quantize(Decimal("0.01"))
-    delivery_slot = f"{delivery_date.strip()} {slot_start}-{slot_end}"
 
     ok, stock_error = _reserve_stock(cart_items, db)
     if not ok:
@@ -365,64 +464,87 @@ def order_create(
         request.session["cart_error"] = stock_error
         return RedirectResponse(url="/cart/", status_code=303)
 
-    order = Order(
-        order_number=_make_order_number(),
-        user_id=user.id,
-        total_price=total_price,
-        status="created",
-        payment_status="pending",
-        customer_name=checkout_form["full_name"],
-        customer_phone=checkout_form["phone"],
-        delivery_address=checkout_form["address"] or None,
-        delivery_method=delivery_method,
-        delivery_slot=delivery_slot or None,
-        customer_comment=checkout_form["comment"] or None,
-        selected_payment_method=payment_method,
-        delivery_fee=delivery_price,
-        platform_fee=platform_fee,
-        coupon_id=coupon.id if coupon else None,
-        discount_amount=discount_amount,
-    )
-    db.add(order)
-    db.flush()
+    created_orders: list[Order] = []
+    for group in group_payloads:
+        group_discount = Decimal("0")
+        if discount_amount > 0 and subtotal > 0:
+            group_discount = (discount_amount * Decimal(group["subtotal"]) / subtotal).quantize(Decimal("0.01"))
+        group_goods_total = Decimal(group["subtotal"]) - group_discount
+        delivery_price = Decimal(group["delivery_fee"])
+        total_price = group_goods_total + delivery_price
+        platform_fee = (group_goods_total * commission_percent / Decimal("100")).quantize(Decimal("0.01"))
 
-    db.add(Delivery(
-        order_id=order.id,
-        address=checkout_form["address"] or "Самовывоз",
-        method=delivery_method,
-        delivery_date=parsed_date,
-    ))
+        order = Order(
+            order_number=_make_order_number(),
+            user_id=user.id,
+            total_price=total_price,
+            status="awaiting_payment",
+            payment_status="pending",
+            customer_name=checkout_form["full_name"],
+            customer_phone=checkout_form["phone"],
+            delivery_address=group["address"] or None,
+            delivery_method=group["method"],
+            delivery_slot=group["delivery_slot"],
+            customer_comment=group["comment"] or None,
+            selected_payment_method=payment_method,
+            delivery_fee=delivery_price,
+            platform_fee=platform_fee,
+            coupon_id=coupon.id if coupon else None,
+            discount_amount=group_discount,
+        )
+        db.add(order)
+        db.flush()
 
-    for item in cart_items:
-        db.add(OrderItem(order_id=order.id, product_id=item.product_id, quantity=item.quantity))
-        db.delete(item)
+        delivery = Delivery(
+            order_id=order.id,
+            address=group["address"] or None,
+            method=group["method"],
+            status="waiting_payment",
+            delivery_date=group["parsed_date"],
+            delivery_slot=group["delivery_slot"],
+            comment=group["comment"] or None,
+            delivery_fee=delivery_price,
+        )
+        if group["method"] == "pickup":
+            delivery.address = group["seller"].pickup_address or group["seller"].farm_address or None
+        elif group["method"] == "partner_delivery":
+            delivery.provider = "Демо-партнёр доставки"
+            delivery.provider_name = "Демо-партнёр доставки"
+            delivery.track_number = _demo_track_number(order.id)
+            delivery.tracking_url = f"/delivery/track/{delivery.track_number}"
+            delivery.external_id = delivery.track_number
+        db.add(delivery)
 
-    if payment_method in PAY_NOW_METHODS:
-        paid, payment_error = _charge_order(order, user, db, payment_method)
-        if not paid:
-            db.rollback()
-            request.session["cart_error"] = payment_error
-            return RedirectResponse(url="/cart/", status_code=303)
+        for item in group["items"]:
+            db.add(OrderItem(order_id=order.id, product_id=item.product_id, quantity=item.quantity))
+            db.delete(item)
 
-    db.add(Notification(
-        user_id=user.id,
-        type="email",
-        subject="Заказ создан",
-        body=(
-            f"Заказ #{order.id} создан. "
-            f"Способ получения: {_delivery_label(delivery_method)}. "
-            f"Оплата: {_payment_label(payment_method)}."
-        ),
-    ))
+        created_orders.append(order)
+        db.add(Notification(
+            user_id=user.id,
+            type="email",
+            subject=f"Заказ #{order.order_number or order.id} ожидает оплаты",
+            body=(
+                f"Заказ #{order.order_number or order.id} создан. "
+                f"Способ получения: {_delivery_label(str(group['method']))}. "
+                f"Сумма к оплате: {float(total_price):.2f} ₽."
+            ),
+        ))
+
     db.commit()
 
+    if smtp_is_configured() and user.email:
+        for order in created_orders:
+            try:
+                send_email(user.email, f"Заказ #{order.order_number or order.id} ожидает оплаты", "Заказ будет подтверждён только после успешной оплаты.")
+            except Exception:
+                pass
+
     _clear_checkout_form(request)
-    request.session["order_success"] = (
-        f"Заказ #{order.id} оформлен. "
-        + ("Оплата подтверждена." if order.payment_status == "paid" else "Статус: ожидает оплаты.")
-    )
+    order_ids = ", ".join(f"#{order.id}" for order in created_orders)
+    request.session["order_success"] = f"Созданы заказы {order_ids}. Статус: ожидает оплаты."
     if payment_method == "yookassa":
-        return RedirectResponse(url=f"/payment/{order.id}", status_code=303)
+        return RedirectResponse(url=f"/payment/{created_orders[0].id}", status_code=303)
     return RedirectResponse(url="/order/orders", status_code=303)
 
 
@@ -531,10 +653,12 @@ def order_complete(order_id: int, request: Request, db: Session = Depends(get_db
     if guard:
         return guard
 
-    order = db.query(Order).filter(Order.id == order_id, Order.user_id == user.id).first()
+    order = db.query(Order).options(joinedload(Order.delivery)).filter(Order.id == order_id, Order.user_id == user.id).first()
     if order and is_order_receivable(order.status):
         order.status = "completed"
         order.escrow_status = "released"
+        if order.delivery:
+            order.delivery.status = "delivered"
         db.commit()
 
         db.add(Notification(
@@ -556,12 +680,14 @@ def order_cancel(order_id: int, request: Request, db: Session = Depends(get_db))
 
     order = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .options(joinedload(Order.items).joinedload(OrderItem.product), joinedload(Order.delivery))
         .filter(Order.id == order_id, Order.user_id == user.id)
         .first()
     )
-    if order and order.payment_status == "pending" and normalize_order_status(order.status) == "created":
-        order.status = "canceled"
+    if order and order.payment_status == "pending" and normalize_order_status(order.status) in {"created", "awaiting_payment", "payment_failed"}:
+        order.status = "cancelled"
+        if order.delivery:
+            order.delivery.status = "cancelled"
         _restore_order_stock(order)
         db.commit()
     return RedirectResponse("/order/orders", status_code=303)
@@ -656,5 +782,3 @@ def order_return(
         order.return_reason = reason
         db.commit()
     return RedirectResponse("/order/orders", status_code=303)
-
-

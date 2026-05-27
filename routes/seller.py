@@ -10,27 +10,38 @@ from sqlalchemy.orm import Session, joinedload
 from auth import check_role, get_optional_user
 from database import get_db
 from logistics import ensure_logistics_shipment, mark_shipment_in_transit
-from marketplace_utils import effective_product_price, product_price_payload, product_stock_quantity
-from models import Complaint, Conversation, FarmCertificate, Message, Notification, Order, OrderItem, Product, Review, SellerReview, User
+from marketplace_utils import effective_product_price, product_stock_quantity
+from models import Complaint, Conversation, FarmCertificate, Notification, Order, OrderItem, Product, SellerReview, User
 from order_statuses import ORDER_STATUS_LABELS, normalize_order_status
 from routes.conversations import _save_attachment, upsert_support_conversation
 
 UPLOAD_DIR = os.path.join("static", "uploads", "products")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 FARM_UPLOAD_DIR = os.path.join("static", "uploads", "farms")
 os.makedirs(FARM_UPLOAD_DIR, exist_ok=True)
 CERT_UPLOAD_DIR = FARM_UPLOAD_DIR
 ALLOWED_FARM_EXT = ALLOWED_IMAGE_EXT
+
+
+def _read_with_limit(upload: UploadFile, limit: int) -> bytes | None:
+    data = upload.file.read(limit + 1)
+    if len(data) > limit:
+        return None
+    return data
 
 router = APIRouter(prefix="/seller", tags=["seller"])
 
 SELLER_STATUS_TRANSITIONS = {
     "confirm": "confirmed",
     "assemble": "assembling",
-    "ship": "shipped",
-    "deliver": "delivering",
-    "cancel": "canceled",
+    "ready_pickup": "ready_for_pickup",
+    "ready_delivery": "ready_for_delivery",
+    "transfer_partner": "ready_for_delivery",
+    "in_delivery": "in_delivery",
+    "delivered": "delivered",
+    "cancel": "cancelled",
 }
 
 SELLER_NOTIFICATION_TEMPLATES = {
@@ -95,10 +106,13 @@ def _save_product_image(upload: UploadFile | None) -> str | None:
     ext = os.path.splitext(upload.filename)[1].lower()
     if ext not in ALLOWED_IMAGE_EXT:
         return None
+    data = _read_with_limit(upload, MAX_IMAGE_BYTES)
+    if data is None or not data:
+        return None
     filename = f"{uuid.uuid4().hex}{ext}"
     full_path = os.path.join(UPLOAD_DIR, filename)
     with open(full_path, "wb") as file_obj:
-        file_obj.write(upload.file.read())
+        file_obj.write(data)
     return f"/static/uploads/products/{filename}"
 
 
@@ -108,10 +122,13 @@ def _save_farm_photo(upload: UploadFile | None) -> str | None:
     ext = os.path.splitext(upload.filename)[1].lower()
     if ext not in ALLOWED_FARM_EXT:
         return None
+    data = _read_with_limit(upload, MAX_IMAGE_BYTES)
+    if data is None or not data:
+        return None
     filename = f"{uuid.uuid4().hex}{ext}"
     full_path = os.path.join(FARM_UPLOAD_DIR, filename)
     with open(full_path, "wb") as file_obj:
-        file_obj.write(upload.file.read())
+        file_obj.write(data)
     return f"/static/uploads/farms/{filename}"
 
 
@@ -121,10 +138,13 @@ def _save_certificate_image(upload: UploadFile | None) -> str | None:
     ext = os.path.splitext(upload.filename)[1].lower()
     if ext not in ALLOWED_FARM_EXT:
         return None
+    data = _read_with_limit(upload, MAX_IMAGE_BYTES)
+    if data is None or not data:
+        return None
     filename = f"{uuid.uuid4().hex}{ext}"
     full_path = os.path.join(CERT_UPLOAD_DIR, filename)
     with open(full_path, "wb") as file_obj:
-        file_obj.write(upload.file.read())
+        file_obj.write(data)
     return f"/static/uploads/farms/{filename}"
 
 
@@ -177,7 +197,7 @@ def _build_seller_financials(seller_id: int, db: Session) -> dict[str, float | i
 
     for order in orders:
         normalized_status = normalize_order_status(order.status)
-        if order.payment_status != "paid" or normalized_status in {"canceled", "refunded"}:
+        if order.payment_status != "paid" or normalized_status in {"cancelled", "refunded"}:
             continue
 
         seller_goods_total, seller_fee, seller_net = _seller_money_breakdown(order, seller_id)
@@ -381,7 +401,7 @@ def seller_settings_page(request: Request, db: Session = Depends(get_db)):
     return request.app.state.templates.TemplateResponse(
         request,
         "seller",
-        _seller_dashboard_context(user, db, request, initial_tab="profile"),
+        _seller_dashboard_context(user, db, request, initial_tab=request.query_params.get("tab") or "profile"),
     )
 
 
@@ -516,15 +536,21 @@ def seller_change_order_status(
         return RedirectResponse("/seller/orders", status_code=303)
 
     current_status = normalize_order_status(order.status)
+    method = order.delivery_method or (order.delivery.method if order.delivery else "pickup")
+    ready_action = "ready_pickup" if method == "pickup" else ("transfer_partner" if method == "partner_delivery" else "ready_delivery")
     allowed_actions = {
-        "created": {"confirm", "assemble", "cancel"},
+        "awaiting_payment": {"cancel"},
+        "created": {"cancel"},
+        "paid": {"confirm", "assemble", "cancel"},
         "confirmed": {"assemble", "cancel"},
-        "paid": {"assemble", "cancel"},
-        "assembling": {"ship", "cancel"},
-        "shipped": {"deliver"},
-        "delivering": set(),
+        "assembling": {ready_action, "cancel"},
+        "ready_for_pickup": {"delivered"},
+        "ready_for_delivery": {"in_delivery", "delivered"} if method == "farmer_delivery" else {"in_delivery"},
+        "in_delivery": {"delivered"},
+        "delivered": set(),
+        "received": set(),
         "completed": set(),
-        "canceled": set(),
+        "cancelled": set(),
         "refunded": set(),
     }
     if action not in allowed_actions.get(current_status, set()):
@@ -542,18 +568,29 @@ def seller_change_order_status(
 
     order.status = next_status
 
-    if next_status == "canceled":
+    if next_status == "cancelled":
         order.return_reason = "Отменено продавцом"
         order.seller_cancel_reason = cancel_reason
         _restore_order_stock(order)
     else:
         order.seller_cancel_reason = None
 
-    delivery = None
-    if next_status == "shipped":
-        delivery = ensure_logistics_shipment(order)
-    elif next_status == "delivering":
-        delivery = mark_shipment_in_transit(order)
+    delivery = order.delivery
+    if delivery:
+        if next_status == "confirmed":
+            delivery.status = "waiting_assembly"
+        elif next_status == "ready_for_pickup":
+            delivery.status = "ready_for_pickup"
+        elif next_status == "ready_for_delivery" and method == "partner_delivery":
+            delivery.status = "transferred_to_delivery"
+        elif next_status == "ready_for_delivery":
+            delivery.status = "ready_for_delivery"
+        elif next_status == "in_delivery":
+            delivery.status = "in_transit"
+        elif next_status == "delivered":
+            delivery.status = "delivered"
+        elif next_status == "cancelled":
+            delivery.status = "cancelled"
 
     subject_template, body_template = SELLER_NOTIFICATION_TEMPLATES.get(
         next_status,
@@ -812,6 +849,50 @@ def seller_update_profile(
     request.session["seller_error"] = None
     request.session["seller_success"] = "\u0410\u043d\u043a\u0435\u0442\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u0430 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0430."
     return RedirectResponse("/seller/", status_code=303)
+
+
+@router.post("/delivery/settings")
+def seller_update_delivery_settings(
+    request: Request,
+    pickup_enabled: int = Form(0),
+    pickup_address: str = Form(""),
+    pickup_comment: str = Form(""),
+    farmer_delivery_enabled: int = Form(0),
+    farmer_delivery_fee: Decimal = Form(0),
+    farmer_delivery_min_order: Decimal = Form(0),
+    farmer_delivery_comment: str = Form(""),
+    delivery_slots: list[str] = Form([]),
+    partner_delivery_enabled: int = Form(0),
+    partner_delivery_fee: Decimal = Form(0),
+    partner_delivery_comment: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = get_optional_user(request, db)
+    guard = check_role(user, ["seller"])
+    if guard:
+        return guard
+    if user.role == "seller" and not _seller_is_approved(user):
+        return RedirectResponse("/seller/pending", status_code=303)
+
+    if not any([pickup_enabled, farmer_delivery_enabled, partner_delivery_enabled]):
+        request.session["seller_error"] = "Включите хотя бы один способ получения."
+        return RedirectResponse("/seller/settings", status_code=303)
+
+    user.pickup_enabled = 1 if pickup_enabled else 0
+    user.pickup_address = pickup_address.strip()[:500] or None
+    user.pickup_comment = pickup_comment.strip()[:1000] or None
+    user.farmer_delivery_enabled = 1 if farmer_delivery_enabled else 0
+    user.farmer_delivery_fee = max(Decimal("0"), Decimal(farmer_delivery_fee or 0))
+    user.farmer_delivery_min_order = max(Decimal("0"), Decimal(farmer_delivery_min_order or 0))
+    user.farmer_delivery_comment = farmer_delivery_comment.strip()[:1000] or None
+    valid_slots = [slot for slot in delivery_slots if slot in {"10-14", "14-18", "18-22"}]
+    user.delivery_slots = ",".join(valid_slots or ["10-14", "14-18", "18-22"])
+    user.partner_delivery_enabled = 1 if partner_delivery_enabled else 0
+    user.partner_delivery_fee = max(Decimal("0"), Decimal(partner_delivery_fee or 0))
+    user.partner_delivery_comment = partner_delivery_comment.strip()[:1000] or None
+    db.commit()
+    request.session["seller_success"] = "Настройки доставки сохранены"
+    return RedirectResponse("/seller/settings?tab=delivery", status_code=303)
 
 
 @router.post("/profile/certificate/add")

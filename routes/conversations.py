@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import uuid
-from collections import defaultdict
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
@@ -134,16 +133,28 @@ def _allowed_to_send(user: User, conversation: Conversation) -> bool:
     return False
 
 
+ALLOWED_ATTACHMENT_EXT = {
+    ".jpg", ".jpeg", ".png", ".webp", ".gif",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv",
+}
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 def _save_attachment(upload: UploadFile | None) -> str | None:
     if not upload or not upload.filename:
         return None
+    ext = os.path.splitext(upload.filename)[1].lower()
+    if ext not in ALLOWED_ATTACHMENT_EXT:
+        return None
+    data = upload.file.read(MAX_ATTACHMENT_BYTES + 1)
+    if not data or len(data) > MAX_ATTACHMENT_BYTES:
+        return None
     base_dir = os.path.join("static", "uploads", "messages")
     os.makedirs(base_dir, exist_ok=True)
-    ext = os.path.splitext(upload.filename)[1].lower()
     filename = f"{uuid.uuid4().hex}{ext}"
     path = os.path.join(base_dir, filename)
     with open(path, "wb") as file_obj:
-        file_obj.write(upload.file.read())
+        file_obj.write(data)
     return f"/static/uploads/messages/{filename}"
 
 

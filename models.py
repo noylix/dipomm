@@ -1,7 +1,7 @@
 # models.py
 # Модели SQLAlchemy для фермерского маркетплейса
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database import Base
@@ -41,6 +41,19 @@ class User(Base):
     seller_application_rejection_reason = Column(String(2000), nullable=True)
     seller_application_admin_comment = Column(String(2000), nullable=True)
 
+    # Delivery settings for seller checkout
+    pickup_enabled = Column(Integer, default=1)
+    pickup_address = Column(String(500), nullable=True)
+    pickup_comment = Column(String(1000), nullable=True)
+    farmer_delivery_enabled = Column(Integer, default=1)
+    farmer_delivery_fee = Column(Numeric(10, 2), default=500)
+    farmer_delivery_min_order = Column(Numeric(10, 2), default=0)
+    farmer_delivery_comment = Column(String(1000), nullable=True)
+    delivery_slots = Column(String(1000), nullable=True)
+    partner_delivery_enabled = Column(Integer, default=0)
+    partner_delivery_fee = Column(Numeric(10, 2), default=700)
+    partner_delivery_comment = Column(String(1000), nullable=True)
+
     # Связи
     cart_items = relationship("CartItem", back_populates="user", cascade="all, delete")
     orders = relationship("Order", back_populates="user")
@@ -57,7 +70,6 @@ class User(Base):
     conversations_accountant = relationship("Conversation", foreign_keys="Conversation.accountant_id", back_populates="accountant", cascade="all, delete")
     messages_sent = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender", cascade="all, delete")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete")
-    chat_messages = relationship("ChatMessage", foreign_keys="ChatMessage.sender_id", back_populates="author", cascade="all, delete")
 
 
 class Product(Base):
@@ -137,6 +149,9 @@ class Order(Base):
     total_price = Column(Numeric(10, 2), default=0)
     status = Column(String(50), default="created")  # created, paid, assembling, delivering, completed, canceled, refunded
     payment_status = Column(String(50), default="pending")  # pending, paid
+    payment_id = Column(String(255), nullable=True)
+    paid_at = Column(DateTime, nullable=True)
+    payment_amount = Column(Numeric(10, 2), nullable=True)
     customer_name = Column(String(255), nullable=True)
     customer_phone = Column(String(50), nullable=True)
     delivery_address = Column(String(500), nullable=True)
@@ -162,7 +177,6 @@ class Order(Base):
     items = relationship("OrderItem", back_populates="order", cascade="all, delete")
     delivery = relationship("Delivery", back_populates="order", uselist=False, cascade="all, delete")
     coupon = relationship("Coupon", back_populates="orders")
-    chat_messages = relationship("ChatMessage", back_populates="order", cascade="all, delete")
 
 
 class OrderItem(Base):
@@ -183,9 +197,13 @@ class Delivery(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"))
-    address = Column(String(500), nullable=False)
+    address = Column(String(500), nullable=True)
     method = Column(String(50), nullable=False)  # courier, pickup, post
     provider = Column(String(100), nullable=True)
+    provider_name = Column(String(100), nullable=True)
+    delivery_slot = Column(String(100), nullable=True)
+    comment = Column(String(2000), nullable=True)
+    delivery_fee = Column(Numeric(10, 2), default=0)
     external_id = Column(String(100), nullable=True)
     track_number = Column(String(100), nullable=True)
     tracking_url = Column(String(500), nullable=True)
@@ -328,21 +346,6 @@ class Message(Base):
 
     conversation = relationship("Conversation", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id], back_populates="messages_sent")
-
-
-class ChatMessage(Base):
-    __tablename__ = "chat_messages"
-
-    id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    recipient_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    message = Column(String(2000), nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-
-    order = relationship("Order", back_populates="chat_messages")
-    author = relationship("User", foreign_keys=[sender_id], back_populates="chat_messages")
-    recipient = relationship("User", foreign_keys=[recipient_id])
 
 
 class PlatformSetting(Base):

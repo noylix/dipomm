@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Notification, User
-from auth import get_optional_user, check_logged_in, check_role
+from auth import get_optional_user, check_role
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 templates = Jinja2Templates(directory="templates")
@@ -132,7 +132,9 @@ def notifications_admin(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("notifications_admin", {
         "request": request,
         "user": user,
-        "notifications": system_notifications
+        "notifications": system_notifications,
+        "notification_success": request.session.pop("notification_success", None),
+        "notification_error": request.session.pop("notification_error", None),
     })
 
 
@@ -181,6 +183,7 @@ def create_system_notification(
     )
     db.add(notification)
     db.commit()
+    request.session["notification_success"] = "Системное уведомление создано."
 
     return RedirectResponse("/notifications/admin", status_code=303)
 
@@ -200,6 +203,16 @@ def broadcast_notification(
     if guard:
         return guard
 
+    if target_role not in {"all", "user", "seller", "manager", "admin", "accountant"}:
+        request.session["notification_error"] = "Недопустимая аудитория рассылки."
+        return RedirectResponse("/notifications/admin", status_code=303)
+
+    subject = (subject or "").strip()
+    body = (body or "").strip()
+    if not subject or not body:
+        request.session["notification_error"] = "Заполните тему и текст рассылки."
+        return RedirectResponse("/notifications/admin", status_code=303)
+
     # Получаем целевых пользователей
     query = db.query(User)
     if target_role != "all":
@@ -218,6 +231,14 @@ def broadcast_notification(
         )
         db.add(notification)
 
+    db.add(Notification(
+        user_id=None,
+        type=type,
+        subject=subject,
+        body=f"{body}\n\nАудитория: {'все пользователи' if target_role == 'all' else target_role}. Получателей: {len(users)}.",
+        is_read=0,
+    ))
     db.commit()
+    request.session["notification_success"] = f"Рассылка отправлена. Получателей: {len(users)}."
 
     return RedirectResponse("/notifications/admin", status_code=303)

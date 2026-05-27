@@ -427,6 +427,23 @@ a.react-icon-btn {
     justify-content: space-between;
     align-items: flex-start;
     overflow: hidden;
+    color: #1e241b;
+    text-decoration: none;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.react-banner:hover {
+    color: #1e241b;
+    transform: translateY(-2px);
+    box-shadow: 0 18px 38px rgba(30, 36, 27, 0.1);
+}
+
+.react-banner-copy {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 10px;
+    max-width: min-content;
 }
 
 .react-banner strong {
@@ -434,7 +451,13 @@ a.react-icon-btn {
     line-height: 1.05;
 }
 
-.react-banner span {
+.react-banner small {
+    font-size: 14px;
+    line-height: 1.25;
+    color: rgba(30, 36, 27, 0.68);
+}
+
+.react-banner-icon {
     font-size: 56px;
     line-height: 1;
 }
@@ -456,6 +479,7 @@ a.react-icon-btn {
 .tone-pink { background: #f7bfcb; }
 .tone-green { background: #b2e659; }
 .tone-yellow { background: #e7ff5d; }
+.tone-cream { background: #fff1c9; }
 
 .react-products-grid {
     display: grid;
@@ -463,11 +487,58 @@ a.react-icon-btn {
     gap: 18px;
 }
 
+.react-home-shelves {
+    display: grid;
+    gap: 30px;
+}
+
+.react-home-shelf {
+    display: grid;
+    gap: 16px;
+}
+
+.react-home-shelf-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.react-home-shelf-head h2 {
+    margin: 6px 0 4px;
+    font-size: 30px;
+    line-height: 1.1;
+}
+
+.react-home-shelf-head p {
+    margin: 0;
+    color: rgba(30, 36, 27, 0.68);
+}
+
+.react-home-shelf-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: inline-grid;
+    place-items: center;
+    background: var(--color-brand-soft);
+    color: var(--color-brand-dark);
+}
+
+.react-home-shelf-icon i,
+.react-home-shelf-icon svg {
+    width: 21px;
+    height: 21px;
+}
+
 .react-product-card {
     position: relative;
     overflow: hidden;
     color: #1e241b;
     transition: transform 0.18s ease, box-shadow 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .react-product-card:hover {
@@ -547,8 +618,11 @@ a.react-icon-btn {
 
 .react-product-body {
     padding: 13px 14px 15px;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .react-product-name {
@@ -648,6 +722,11 @@ a.react-icon-btn {
     background: #1e241b;
     color: #ffffff;
     border-color: #1e241b;
+}
+
+.react-rating-chip {
+    color: #365f12;
+    background: #edf8dc;
 }
 
 .react-catalog-page {
@@ -1048,6 +1127,15 @@ a.react-icon-btn {
     grid-template-columns: minmax(0, 1fr) auto;
     width: 100%;
     align-items: center;
+    margin-top: auto;
+}
+
+.react-product-card .react-product-meta {
+    min-height: 26px;
+}
+
+.react-product-card .react-stock-label {
+    min-height: 22px;
 }
 
 .react-buy-btn {
@@ -1129,6 +1217,10 @@ a.react-icon-btn {
     padding: 16px;
 }
 
+.react-complaints-shell .react-complaint-card {
+    border-left: 4px solid rgba(90, 118, 70, 0.28);
+}
+
 .react-complaint-card-head {
     display: flex;
     justify-content: space-between;
@@ -1160,6 +1252,13 @@ a.react-icon-btn {
     font-size: 14px;
 }
 
+.react-complaint-card-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
 .react-complaint-status-form {
     display: grid;
     grid-template-columns: minmax(180px, 260px) minmax(260px, 1fr) auto;
@@ -1171,6 +1270,10 @@ a.react-icon-btn {
 
 .react-complaint-status-form .react-actions {
     justify-content: flex-start;
+}
+
+.react-complaint-status-form textarea {
+    min-height: 96px;
 }
 
 .react-complaint-detail {
@@ -2067,6 +2170,24 @@ a.react-icon-btn {
     gap: 12px;
 }
 
+.react-checkout-group {
+    border: 1px solid rgba(46, 125, 50, 0.18);
+    box-shadow: none;
+}
+
+.react-checkbox-row {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    line-height: 1.35;
+}
+
+.react-checkbox-row input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+}
+
 .react-cart-submit.is-disabled {
     opacity: 0.62;
     cursor: not-allowed;
@@ -2101,6 +2222,148 @@ a.react-icon-btn {
     color: var(--color-muted);
 }
 
+.react-static-page {
+    display: grid;
+    gap: 24px;
+}
+
+.react-static-head {
+    display: grid;
+    gap: 12px;
+    max-width: 880px;
+    padding-bottom: 8px;
+}
+
+.react-static-head h1 {
+    margin: 0;
+    font-size: 38px;
+    line-height: 1.12;
+}
+
+.react-static-head p {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 18px;
+    line-height: 1.55;
+}
+
+.react-static-kicker {
+    color: var(--color-brand-dark);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.react-static-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.react-static-grid-wide {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.react-static-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(260px, .8fr);
+    gap: 18px;
+    align-items: stretch;
+}
+
+.react-static-section {
+    display: grid;
+    gap: 14px;
+}
+
+.react-static-section h2 {
+    margin: 0;
+    font-size: 26px;
+}
+
+.react-static-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding-left: 22px;
+    color: var(--color-muted);
+    line-height: 1.5;
+}
+
+.react-static-list li::marker {
+    color: var(--color-brand-dark);
+    font-weight: 800;
+}
+
+.react-static-aside,
+.react-static-note {
+    border: 1px solid rgba(93, 128, 51, .22);
+    border-radius: var(--radius-panel);
+    background: var(--color-brand-soft);
+    padding: 22px;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+}
+
+.react-static-aside p,
+.react-static-note p {
+    margin: 0;
+    color: var(--color-muted);
+    line-height: 1.5;
+}
+
+.react-static-price-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.react-static-price-list article {
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+    padding: 22px;
+    display: grid;
+    gap: 8px;
+}
+
+.react-static-price-list span {
+    color: var(--color-muted);
+    font-size: 14px;
+}
+
+.react-static-price-list b {
+    font-size: 30px;
+    line-height: 1.1;
+}
+
+.react-static-price-list p {
+    margin: 0;
+    color: var(--color-muted);
+    line-height: 1.45;
+}
+
+.react-static-card {
+    display: grid;
+    gap: 10px;
+    padding: 24px;
+}
+
+.react-static-card h2 {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.2;
+}
+
+.react-static-card p {
+    margin: 0;
+    color: var(--color-muted);
+    line-height: 1.5;
+}
+
 .react-footer {
     background:
         radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.32), transparent 28%),
@@ -2112,18 +2375,51 @@ a.react-icon-btn {
 
 .react-footer-inner {
     display: grid;
-    grid-template-columns: 1.2fr 1fr 1fr 1fr;
+    grid-template-columns: minmax(0, 1.35fr) minmax(150px, .8fr) minmax(150px, .8fr) minmax(180px, .9fr);
     gap: 22px;
+    align-items: start;
 }
 
 .react-footer h4 {
     margin: 0 0 10px;
 }
 
+.react-footer p {
+    margin: 0;
+    color: rgba(25, 37, 22, .78);
+    line-height: 1.5;
+}
+
 .react-footer a {
     display: block;
-    margin: 6px 0;
+    margin: 0;
+    line-height: 1.35;
     word-break: break-word;
+}
+
+.react-footer a:hover {
+    color: var(--color-brand-dark);
+}
+
+.react-footer-brand,
+.react-footer-links,
+.react-footer-contact {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+}
+
+.react-footer-brand {
+    max-width: 380px;
+}
+
+.react-footer-help {
+    display: inline-flex !important;
+    width: fit-content;
+    border: 1px solid rgba(25, 37, 22, .16);
+    border-radius: var(--radius-control);
+    background: rgba(255, 255, 255, .56);
+    padding: 8px 12px;
 }
 
 .react-admin-top {
@@ -2293,10 +2589,21 @@ a.react-icon-btn {
     .react-hero-banners,
     .react-stat-grid,
     .react-info-grid,
+    .react-static-grid,
+    .react-static-split,
+    .react-static-price-list,
     .react-catalog-promo-row,
     .react-catalog-layout,
     .react-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .react-static-head h1 {
+        font-size: 30px;
+    }
+
+    .react-static-head p {
+        font-size: 16px;
     }
 
     .react-catalog-sidebar {
@@ -2321,6 +2628,15 @@ a.react-icon-btn {
 
     .react-filter-submit {
         width: 100%;
+    }
+
+    .react-home-shelf-head {
+        display: grid;
+        align-items: start;
+    }
+
+    .react-home-shelf-head .react-btn {
+        width: fit-content;
     }
 
     .react-product-detail .react-product-spec-grid {
@@ -2374,6 +2690,16 @@ a.react-icon-btn {
     .react-complaint-status-form,
     .react-complaint-summary {
         grid-template-columns: 1fr;
+    }
+
+    .react-complaint-card-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .react-complaint-card-actions .react-btn,
+    .react-complaint-card-actions .react-inline-form {
+        width: 100%;
     }
 }
 

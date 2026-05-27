@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from database import get_db
 from models import Review, SellerReview, Order, OrderItem, Product, User
-from auth import get_optional_user, check_logged_in, check_role
+from auth import get_optional_user, check_role
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 templates = Jinja2Templates(directory="templates")
@@ -183,7 +183,7 @@ def product_reviews(product_id: int, request: Request, db: Session = Depends(get
 def reviews_admin(request: Request, db: Session = Depends(get_db)):
     """Модерация отзывов — только manager и admin"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
@@ -215,7 +215,7 @@ def reviews_admin(request: Request, db: Session = Depends(get_db)):
 def approve_review(review_id: int, request: Request, db: Session = Depends(get_db)):
     """Одобрить отзыв"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
@@ -231,7 +231,7 @@ def approve_review(review_id: int, request: Request, db: Session = Depends(get_d
 def reject_review(review_id: int, request: Request, db: Session = Depends(get_db)):
     """Отклонить отзыв"""
     user = get_optional_user(request, db)
-    guard = check_role(user, ["admin"])
+    guard = check_role(user, ["admin", "manager"])
     if guard:
         return guard
 
