@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100" width="120" height="40">
+  <!-- Green M -->
+  <path d="M10,80 L10,20 L35,20 L50,50 L65,20 L90,20 L90,80 L75,80 L75,40 L55,75 L45,75 L25,40 L25,80 Z" fill="#2CB24B"/>
+  <!-- Green I -->
+  <path d="M100,80 L100,20 L115,20 L115,80 Z" fill="#2CB24B"/>
+  <!-- Green/Blue R -->
+  <path d="M125,80 L125,20 L155,20 Q175,20 175,40 Q175,55 160,58 L180,80 L162,80 L145,60 L140,60 L140,80 Z M140,50 L155,50 Q162,50 162,42 Q162,35 155,35 L140,35 Z" fill="#2CB24B"/>
+  <!-- Blue accent on R -->
+  <path d="M160,35 Q180,35 185,55 L175,60 Q170,45 160,45 Z" fill="#00A0E3"/>
+</svg>

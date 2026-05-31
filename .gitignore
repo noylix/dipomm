@@ -1,0 +1,15 @@
+.env
+.env.local
+.env.production
+.venv/
+.venv312/
+__pycache__/
+*.pyc
+*.log
+node_modules/
+dist/
+outputs/
+app.db
+farmmarket.db
+runtime_test_ok.db
+static/uploads/

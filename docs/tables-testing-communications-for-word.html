@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Таблицы — тестирование модуля коммуникаций</title>
+<style>
+  body { font-family: Times New Roman, serif; font-size: 12pt; margin: 2cm; }
+  h2 { font-size: 14pt; font-weight: bold; margin-top: 24pt; }
+  p.caption { font-size: 12pt; margin-bottom: 6pt; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 24pt; }
+  th, td { border: 1px solid #000; padding: 6pt 8pt; vertical-align: top; text-align: left; }
+  th { font-weight: bold; background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<p class="howto" style="background:#fff8e6;border:1px solid #c90;padding:8pt;margin-bottom:18pt;font-size:11pt;">
+  <b>Актуальный файл для Word</b> (краткие листинги + таблицы): <b>diploma-communications-for-word.html</b> в папке <code>docs/</code>.
+</p>
+
+<p class="caption"><b>Таблица 1</b> — Функциональные требования к модулю коммуникаций</p>
+<table>
+  <tr><th>ID</th><th>Требование</th><th>Приоритет</th></tr>
+  <tr><td>FR-C01</td><td>Диалоги по заказу, товару, жалобе и поддержке фермера</td><td>Высокий</td></tr>
+  <tr><td>FR-C02</td><td>Жалоба покупателя с категорией, текстом и вложением</td><td>Высокий</td></tr>
+  <tr><td>FR-C03</td><td>Ответ модератора в чате и смена статуса жалобы</td><td>Высокий</td></tr>
+  <tr><td>FR-C04</td><td>Отзыв на товар только из завершённого заказа (order_id)</td><td>Высокий</td></tr>
+  <tr><td>FR-C05</td><td>Модерация отзывов (pending → approved/rejected)</td><td>Высокий</td></tr>
+  <tr><td>FR-C06</td><td>Уведомления пользователю и рассылка администратором</td><td>Средний</td></tr>
+  <tr><td>FR-C07</td><td>Счётчик непрочитанных уведомлений (API)</td><td>Средний</td></tr>
+</table>
+
+<p class="caption"><b>Таблица 2</b> — Тестовые сценарии модуля коммуникаций (pytest)</p>
+<table>
+  <tr><th>№</th><th>Сценарий</th><th>Действие</th><th>Ожидаемый результат</th></tr>
+  <tr><td>TC-C01</td><td>Создание жалобы</td><td>POST /complaints/create (user)</td><td>status=new, создан Conversation type=complaint</td></tr>
+  <tr><td>TC-C02</td><td>Ответ администратора</td><td>POST /complaints/admin/{id}/status + response_text</td><td>Notification, Message, admin_response в БД</td></tr>
+  <tr><td>TC-C03</td><td>Статус вопроса по товару</td><td>POST /conversations/{id}/status (seller)</td><td>open ↔ resolved в conversations</td></tr>
+  <tr><td>TC-C04</td><td>Отзыв после покупки</td><td>POST /reviews/create</td><td>Review.status=pending, привязка order_id</td></tr>
+  <tr><td>TC-C05</td><td>Модерация отзыва</td><td>POST /reviews/admin/{id}/approve</td><td>status=approved</td></tr>
+  <tr><td>TC-C06</td><td>Рассылка уведомлений</td><td>POST /notifications/admin/broadcast</td><td>Записи notifications для роли/всех</td></tr>
+  <tr><td>TC-C07</td><td>Доступ к кабинетам</td><td>test_seller_admin_accountant_get_dashboards</td><td>HTTP 200 для /seller/, /admin/, /accounting/</td></tr>
+</table>
+
+<p class="caption"><b>Таблица 3</b> — Соответствие требований, тестов и фрагментов кода</p>
+<table>
+  <tr><th>Требование</th><th>Тест / проверка</th><th>Фрагмент кода</th><th>Результат</th></tr>
+  <tr><td>FR-C01</td><td>TC-C03, ручной /conversations/</td><td>Фрагмент 2</td><td>Выполнено</td></tr>
+  <tr><td>FR-C02, FR-C03</td><td>TC-C01, TC-C02</td><td>Фрагменты 3–4</td><td>Выполнено</td></tr>
+  <tr><td>FR-C04, FR-C05</td><td>TC-C04, TC-C05, /reviews/admin</td><td>Фрагмент 5</td><td>Выполнено</td></tr>
+  <tr><td>FR-C06, FR-C07</td><td>TC-C06, /notifications/</td><td>Фрагмент 6</td><td>Выполнено</td></tr>
+</table>
+
+<p class="caption"><b>Таблица 4</b> — Перечень тестов pytest (файл tests/test_smoke.py)</p>
+<table>
+  <tr><th>Имя теста</th><th>Область</th></tr>
+  <tr><td>test_index_and_public_pages</td><td>Общая доступность страниц</td></tr>
+  <tr><td>test_register_validates_inputs</td><td>Регистрация</td></tr>
+  <tr><td>test_role_login_routes</td><td>Авторизация по ролям</td></tr>
+  <tr><td>test_seller_admin_accountant_get_dashboards</td><td>Кабинеты ролей</td></tr>
+  <tr><td>test_admin_complaint_response_persists_and_notifies_client</td><td>Жалобы + уведомления + messages</td></tr>
+  <tr><td>test_seller_can_change_product_question_status_after_resolved</td><td>Диалоги (product_question)</td></tr>
+</table>
+
+</body>
+</html>

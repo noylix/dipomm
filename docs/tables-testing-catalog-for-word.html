@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Таблицы — тестирование модуля каталога</title>
+<style>
+  body { font-family: Times New Roman, serif; font-size: 12pt; margin: 2cm; }
+  h2 { font-size: 14pt; font-weight: bold; margin-top: 24pt; }
+  p.caption { font-size: 12pt; margin-bottom: 6pt; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 24pt; }
+  th, td { border: 1px solid #000; padding: 6pt 8pt; vertical-align: top; text-align: left; }
+  th { font-weight: bold; background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<p class="caption"><b>Таблица 1</b> — Функциональные требования к модулю управления каталогом продукции</p>
+<table>
+  <tr><th>ID</th><th>Требование</th><th>Приоритет</th></tr>
+  <tr><td>FR-01</td><td>Создание карточки товара продавцом с обязательными полями</td><td>Высокий</td></tr>
+  <tr><td>FR-02</td><td>Галерея изображений, скидка, описание, регион, сорт</td><td>Высокий</td></tr>
+  <tr><td>FR-03</td><td>Статус pending для новых и изменённых карточек продавца</td><td>Высокий</td></tr>
+  <tr><td>FR-04</td><td>Модерация: одобрение и отклонение с причиной</td><td>Высокий</td></tr>
+  <tr><td>FR-05</td><td>Публичный каталог только для approved товаров</td><td>Высокий</td></tr>
+  <tr><td>FR-06</td><td>Фильтры и сортировка на странице /catalog</td><td>Средний</td></tr>
+  <tr><td>FR-07</td><td>Поиск и подсказки</td><td>Средний</td></tr>
+  <tr><td>FR-08</td><td>Карточка товара и блок похожих позиций</td><td>Средний</td></tr>
+</table>
+
+<p class="caption"><b>Таблица 2</b> — Тестовые сценарии модуля каталога</p>
+<table>
+  <tr><th>№</th><th>Сценарий</th><th>Действие</th><th>Ожидаемый результат</th></tr>
+  <tr><td>TC-C01</td><td>Добавление товара</td><td>POST /seller/product/add</td><td>Запись в products, status=pending</td></tr>
+  <tr><td>TC-C02</td><td>Одобрение</td><td>Админ одобряет товар</td><td>status=approved, товар в /catalog</td></tr>
+  <tr><td>TC-C03</td><td>Отклонение</td><td>Админ отклоняет с причиной</td><td>status=rejected, rejection_reason заполнен</td></tr>
+  <tr><td>TC-C04</td><td>Редактирование</td><td>Продавец меняет цену</td><td>status=pending</td></tr>
+  <tr><td>TC-C05</td><td>Фильтр наличия</td><td>GET /catalog?in_stock=1</td><td>Только stock &gt; 0</td></tr>
+  <tr><td>TC-C06</td><td>Сортировка</td><td>sort=price_asc</td><td>Цены по возрастанию</td></tr>
+  <tr><td>TC-C07</td><td>Доступ</td><td>Просмотр pending чужим user</td><td>Редирект, карточка скрыта</td></tr>
+  <tr><td>TC-C08</td><td>Поиск</td><td>GET /search?q=яблоки</td><td>HTTP 200</td></tr>
+</table>
+
+<p class="caption"><b>Таблица 3</b> — Соответствие требований и тестов</p>
+<table>
+  <tr><th>Требование</th><th>Тест</th><th>Результат</th></tr>
+  <tr><td>FR-01, FR-02</td><td>TC-C01</td><td>Выполнено</td></tr>
+  <tr><td>FR-03, FR-04</td><td>TC-C02, TC-C03, TC-C04</td><td>Выполнено</td></tr>
+  <tr><td>FR-05, FR-06</td><td>TC-C02, TC-C05, TC-C06</td><td>Выполнено</td></tr>
+  <tr><td>FR-07</td><td>TC-C08</td><td>Выполнено</td></tr>
+  <tr><td>FR-08</td><td>Ручная проверка /product/{id}</td><td>Выполнено</td></tr>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Модуль коммуникаций — примеры кода (Word)</title>
+<style>
+  body { font-family: 'Times New Roman', Times, serif; font-size: 14pt; line-height: 1.5; margin: 2cm; }
+  p.title { text-align: center; font-weight: bold; font-size: 16pt; margin-bottom: 8pt; }
+  p.subtitle { text-align: center; font-size: 12pt; margin-bottom: 20pt; }
+  p.howto { font-size: 11pt; background: #f5f5f5; border: 1px solid #999; padding: 8pt 10pt; margin-bottom: 18pt; }
+  h2 { font-size: 14pt; font-weight: bold; margin-top: 22pt; margin-bottom: 10pt; }
+  p.caption { font-size: 12pt; margin-top: 14pt; margin-bottom: 3pt; }
+  p.source { font-size: 11pt; font-style: italic; margin: 0 0 4pt 0; color: #333; }
+  p.note { font-size: 11pt; margin: 0 0 6pt 0; }
+  pre.listing {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 9.5pt; line-height: 1.25;
+    background: #fafafa; border: 1px solid #000;
+    padding: 7pt 9pt; white-space: pre-wrap;
+    margin: 0 0 10pt 0; page-break-inside: avoid;
+  }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 16pt; font-size: 12pt; }
+  th, td { border: 1px solid #000; padding: 4pt 6pt; vertical-align: top; }
+  th { font-weight: bold; background: #f0f0f0; }
+</style>
+</head>
+<body>
+
+<p class="title">Приложение. Модуль коммуникаций «Свои Ряды»</p>
+<p class="subtitle">Таблицы тестирования и краткие листинги кода (иллюстративные фрагменты)</p>
+
+<p class="howto"><b>Вставка в Word:</b> Файл → Открыть → этот HTML → Сохранить как .docx.
+Листинги сокращены для диплома; полный код — в репозитории (models.py, routes/*, tests/).
+ER-рисунок: <i>docs/figures/fig-er-communications.png</i>.</p>
+
+<h2>1. Требования и тесты</h2>
+
+<p class="caption"><b>Таблица 1</b> — Функциональные требования</p>
+<table>
+<tr><th>ID</th><th>Требование</th><th>Приоритет</th></tr>
+<tr><td>FR-C01</td><td>Диалоги по заказу, товару, жалобе</td><td>Высокий</td></tr>
+<tr><td>FR-C02</td><td>Жалоба с категорией и текстом</td><td>Высокий</td></tr>
+<tr><td>FR-C03</td><td>Ответ модератора и смена статуса</td><td>Высокий</td></tr>
+<tr><td>FR-C04</td><td>Отзыв только из completed-заказа</td><td>Высокий</td></tr>
+<tr><td>FR-C05</td><td>Модерация отзывов</td><td>Высокий</td></tr>
+<tr><td>FR-C06</td><td>Уведомления и рассылка</td><td>Средний</td></tr>
+</table>
+
+<p class="caption"><b>Таблица 2</b> — Тестовые сценарии (pytest)</p>
+<table>
+<tr><th>№</th><th>Сценарий</th><th>Проверка</th></tr>
+<tr><td>TC-C01</td><td>Создание жалобы</td><td>POST /complaints/create → status=new</td></tr>
+<tr><td>TC-C02</td><td>Ответ админа</td><td>Notification + Message в БД</td></tr>
+<tr><td>TC-C03</td><td>Диалог по товару</td><td>status open ↔ resolved</td></tr>
+<tr><td>TC-C04</td><td>Отзыв</td><td>Review pending + order_id</td></tr>
+<tr><td>TC-C05</td><td>Модерация</td><td>status=approved</td></tr>
+</table>
+
+<p class="caption"><b>Таблица 3</b> — Маршруты и роли</p>
+<table>
+<tr><th>Маршрут</th><th>Роль</th></tr>
+<tr><td>POST /complaints/create</td><td>user</td></tr>
+<tr><td>POST /complaints/admin/{id}/status</td><td>admin, manager</td></tr>
+<tr><td>POST /conversations/{id}/message</td><td>user, seller, admin</td></tr>
+<tr><td>POST /reviews/create</td><td>user</td></tr>
+<tr><td>GET /notifications/unread-count</td><td>авторизованный</td></tr>
+</table>
+
+<h2>2. Примеры листингов кода</h2>
+
+<p class="caption"><b>Листинг 1</b> — Модель жалобы и сообщения в диалоге</p>
+<p class="source">Файл: models.py (фрагмент, неполный)</p>
+<p class="note">Аналогично описаны Review, Notification, Conversation (см. ER-диаграмму).</p>
+<pre class="listing">class Complaint(Base):
+    __tablename__ = &quot;complaints&quot;
+    user_id = Column(Integer, ForeignKey(&quot;users.id&quot;, ondelete=&quot;CASCADE&quot;))
+    order_id = Column(Integer, ForeignKey(&quot;orders.id&quot;), nullable=True)
+    category = Column(String(100), default=&quot;other&quot;)
+    text = Column(String(2000), nullable=False)
+    status = Column(String(50), default=&quot;new&quot;)
+    admin_response = Column(String(2000), nullable=True)
+    # ... target_user_id, target_product_id, attachment_path
+
+class Message(Base):
+    __tablename__ = &quot;messages&quot;
+    conversation_id = Column(Integer, ForeignKey(&quot;conversations.id&quot;))
+    sender_id = Column(Integer, ForeignKey(&quot;users.id&quot;))
+    sender_role = Column(String(50), nullable=False)
+    text = Column(String(2000), nullable=False)
+    is_read = Column(Integer, default=0)</pre>
+
+<p class="caption"><b>Листинг 2</b> — Создание диалога по жалобе и отправка сообщения</p>
+<p class="source">Файл: routes/conversations.py (фрагмент, неполный)</p>
+<p class="note">Типы диалогов: order_chat, product_question, complaint, support_request.</p>
+<pre class="listing">def upsert_complaint_conversation(db, complaint):
+    conversation = db.query(Conversation).filter(
+        Conversation.type == &quot;complaint&quot;,
+        Conversation.complaint_id == complaint.id,
+    ).first()
+    if not conversation:
+        conversation = Conversation(
+            type=&quot;complaint&quot;, buyer_id=complaint.user_id,
+            complaint_id=complaint.id, status=&quot;open&quot;,
+        )
+        db.add(conversation)
+    db.commit()
+    return conversation
+
+@router.post(&quot;/{conversation_id}/message&quot;)
+def conversation_message(...):
+    db.add(Message(conversation_id=..., sender_id=user.id,
+                   sender_role=user.role, text=text[:2000]))
+    db.commit()</pre>
+
+<p class="caption"><b>Листинг 3</b> — Создание жалобы покупателем</p>
+<p class="source">Файл: routes/complaints.py (фрагмент, неполный)</p>
+
+<pre class="listing">@router.post(&quot;/create&quot;)
+def create_complaint(...):
+    guard = check_role(user, [&quot;user&quot;])
+    if category not in COMPLAINT_CATEGORIES or len(text) &lt; 10:
+        return RedirectResponse(&quot;/complaints/create&quot;, status_code=303)
+
+    complaint = Complaint(user_id=user.id, category=category,
+                          text=text, status=&quot;new&quot;)
+    db.add(complaint)
+    db.commit()
+    upsert_complaint_conversation(db, complaint)
+    return RedirectResponse(&quot;/complaints/my&quot;, status_code=303)</pre>
+
+<p class="caption"><b>Листинг 4</b> — Ответ модератора: статус, уведомление, сообщение в чат</p>
+<p class="source">Файл: routes/complaints.py (фрагмент, неполный)</p>
+
+<pre class="listing">@router.post(&quot;/admin/{complaint_id}/status&quot;)
+def update_status(complaint_id, status, response_text, ...):
+    complaint.status = status
+    conversation = upsert_complaint_conversation(db, complaint)
+    if response_text:
+        complaint.admin_response = response_text[:2000]
+        db.add(Notification(user_id=complaint.user_id, type=&quot;system&quot;,
+            subject=f&quot;Ответ на жалобу #{complaint.id}&quot;, body=...))
+        db.add(Message(conversation_id=conversation.id,
+            sender_id=user.id, text=response_text[:2000]))
+    db.commit()</pre>
+
+<p class="caption"><b>Листинг 5</b> — Отзыв после завершённого заказа и одобрение</p>
+<p class="source">Файл: routes/reviews.py (фрагмент, неполный)</p>
+
+<pre class="listing">@router.post(&quot;/create&quot;)
+def review_create(product_id, order_id, rating, text, ...):
+    order = db.query(Order).filter(
+        Order.id == order_id, Order.user_id == user.id,
+        Order.status == &quot;completed&quot;).first()
+    if not order:
+        return RedirectResponse(&quot;/order/orders&quot;, status_code=303)
+    db.add(Review(user_id=user.id, product_id=product_id,
+                  order_id=order_id, status=&quot;pending&quot;))
+    db.commit()
+
+@router.post(&quot;/admin/{review_id}/approve&quot;)
+def approve_review(review_id, ...):
+    review.status = &quot;approved&quot;
+    db.commit()</pre>
+
+<p class="caption"><b>Листинг 6</b> — Уведомление пользователю и счётчик непрочитанных</p>
+<p class="source">Файл: routes/notifications.py (фрагмент, неполный)</p>
+
+<pre class="listing">def send_notification(db, user_id, type, subject, body):
+    db.add(Notification(user_id=user_id, type=type,
+        subject=subject, body=body, is_read=0))
+    db.commit()
+
+@router.get(&quot;/unread-count&quot;)
+def unread_count(request, db):
+    count = db.query(Notification).filter(
+        Notification.user_id == user.id,
+        Notification.is_read == 0).count()
+    return {&quot;count&quot;: count}</pre>
+
+<p class="caption"><b>Листинг 7</b> — Фрагмент автотеста pytest (жалоба и ответ админа)</p>
+<p class="source">Файл: tests/test_smoke.py (фрагмент, неполный)</p>
+<p class="note">Тест test_seller_can_change_product_question_status_after_resolved проверяет смену статуса диалога.</p>
+<pre class="listing">def test_admin_complaint_response_persists_and_notifies_client(client):
+    client.post(&quot;/login&quot;, data={&quot;email&quot;: &quot;user@farm.local&quot;, ...})
+    client.post(&quot;/complaints/create&quot;,
+        data={&quot;category&quot;: &quot;other&quot;, &quot;text&quot;: &quot;Нужна помощь...&quot;})
+    client.post(&quot;/login&quot;, data={&quot;email&quot;: &quot;admin@farm.local&quot;, ...})
+    client.post(f&quot;/complaints/admin/{complaint_id}/status&quot;,
+        data={&quot;status&quot;: &quot;processing&quot;, &quot;response_text&quot;: answer})
+    assert saved.status == &quot;processing&quot;
+    assert db.query(Notification).filter(...).count() == 1
+    assert db.query(Message).filter(Message.text == answer).count() == 1</pre>
+
+
+</body>
+</html>

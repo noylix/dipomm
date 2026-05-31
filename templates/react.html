@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/react-ui.css?v=20260531c">
+</head>
+<body class="react-ui">
+    <div id="react-root"></div>
+    <script id="react-page-data" type="application/json">{{ props | tojson }}</script>
+    <script>
+        window.__REACT_PAGE__ = "{{ page }}";
+    </script>
+    <script src="/static/vendor/react.production.min.js"></script>
+    <script src="/static/vendor/react-dom.production.min.js"></script>
+    <script src="/static/vendor/lucide.min.js"></script>
+    <script src="/static/react-app.js?v=20260531c" charset="utf-8"></script>
+</body>
+</html>
