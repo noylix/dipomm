@@ -13,3 +13,4 @@ app.db
 farmmarket.db
 runtime_test_ok.db
 static/uploads/
+.tools/
