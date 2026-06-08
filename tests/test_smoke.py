@@ -263,6 +263,57 @@ def test_buyer_order_pages_render_with_delivery(client):
         assert response.status_code == 200, f"{path} -> {response.status_code}"
 
 
+def test_delivery_service_exposes_seller_options(client):
+    from database import SessionLocal
+    from delivery_service import normalize_delivery_method, seller_delivery_options, seller_slots
+    from marketplace_utils import MIN_ORDER_AMOUNT
+    from models import User
+
+    db = SessionLocal()
+    try:
+        seller = db.query(User).filter(User.email == "seller@farm.local").one()
+        options = seller_delivery_options(seller, MIN_ORDER_AMOUNT)
+        methods = {option["method"] for option in options}
+        assert "pickup" in methods
+        assert "farmer_delivery" in methods
+        assert seller_slots(seller)
+        assert normalize_delivery_method("courier") == "farmer_delivery"
+        assert normalize_delivery_method("post") == "partner_delivery"
+    finally:
+        db.close()
+
+
+def test_logistics_supports_current_delivery_methods(client):
+    from database import SessionLocal
+    from logistics import ensure_logistics_shipment
+    from models import Delivery, Order, User
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("100.00"),
+            status="ready_for_delivery",
+            payment_status="paid",
+            delivery_method="farmer_delivery",
+        )
+        db.add(order)
+        db.flush()
+        delivery = Delivery(order_id=order.id, method="farmer_delivery", status="ready_for_delivery")
+        db.add(delivery)
+        db.flush()
+
+        shipment = ensure_logistics_shipment(order)
+        assert shipment is delivery
+        assert shipment.provider == "FreshRoute Logistics"
+        assert shipment.track_number
+        assert shipment.tracking_url == f"/delivery/track/{shipment.track_number}"
+    finally:
+        db.rollback()
+        db.close()
+
+
 def test_delivery_tracking_permissions_and_seller_status_flow(client):
     from auth import hash_password
     from database import SessionLocal

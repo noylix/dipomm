@@ -10,6 +10,18 @@ from sqlalchemy.orm import Session, joinedload
 from auth import check_role, get_optional_user, is_email_verified
 from coupon_utils import coupon_applies_to_group, evaluate_coupon, group_discounts
 from database import get_db
+from delivery_service import (
+    DELIVERY_METHODS,
+    DELIVERY_SLOTS,
+    create_order_delivery,
+    delivery_label,
+    delivery_option,
+    normalize_delivery_method,
+    seller_delivery_options,
+    seller_minimum,
+    seller_pickup_address,
+    seller_slots,
+)
 from email_utils import send_email, smtp_is_configured
 from phone_utils import format_ru_phone, is_valid_ru_phone
 from marketplace_utils import (
@@ -45,19 +57,8 @@ from order_statuses import (
 
 router = APIRouter(prefix="/order", tags=["order"])
 
-DELIVERY_METHODS = {"pickup", "farmer_delivery", "partner_delivery"}
-LEGACY_DELIVERY_METHOD_MAP = {
-    "courier": "farmer_delivery",
-    "post": "partner_delivery",
-    "market": "pickup",
-}
 PAY_NOW_METHODS = set()
 PAYMENT_METHODS = {"yookassa"}
-DELIVERY_SLOTS = {
-    "10-14": ("10:00", "14:00"),
-    "14-18": ("14:00", "18:00"),
-    "18-22": ("18:00", "22:00"),
-}
 def _store_checkout_form(request: Request, payload: dict[str, str]) -> None:
     request.session["checkout_form"] = payload
 
@@ -88,8 +89,7 @@ def _make_order_number() -> str:
 
 
 def _normalize_delivery_method(method: str | None) -> str:
-    value = (method or "pickup").strip()
-    return LEGACY_DELIVERY_METHOD_MAP.get(value, value)
+    return normalize_delivery_method(method)
 
 
 def _seller_slots(seller: User | None) -> list[str]:

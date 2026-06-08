@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from database import get_db
+from delivery_service import seller_delivery_options, seller_slots
 from coupon_utils import cart_seller_subtotals, evaluate_coupon, preview_coupon_message
 from models import CartItem, Product, User
 from auth import get_optional_user, check_role, is_email_verified
@@ -18,7 +19,6 @@ from marketplace_utils import (
     product_stock_quantity,
     product_unit,
 )
-from routes.order import _seller_delivery_options, _seller_slots
 
 router = APIRouter(prefix="/cart", tags=["cart"])
 
@@ -125,8 +125,8 @@ def cart_list(request: Request, db: Session = Depends(get_db)):
                 "cart_items": [],
                 "subtotal": 0,
                 "min_order_amount": max(float(seller.min_order_amount or 0), float(MIN_ORDER_AMOUNT)) if seller else float(MIN_ORDER_AMOUNT),
-                "delivery_options": _seller_delivery_options(seller) if seller else [],
-                "delivery_slots": _seller_slots(seller) if seller else ["10-14", "14-18", "18-22"],
+                "delivery_options": seller_delivery_options(seller, MIN_ORDER_AMOUNT) if seller else [],
+                "delivery_slots": seller_slots(seller) if seller else ["10-14", "14-18", "18-22"],
                 "pickup_address": (seller.pickup_address or seller.farm_address or "") if seller else "",
                 "shortage": 0,
                 "is_min_order_met": True,
@@ -371,5 +371,4 @@ def cart_clear(request: Request, db: Session = Depends(get_db)):
     db.query(CartItem).filter(CartItem.user_id == user.id).delete()
     db.commit()
     return RedirectResponse(url="/cart/", status_code=303)
-
 

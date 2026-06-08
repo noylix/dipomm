@@ -5,14 +5,29 @@ from models import Delivery, Order
 
 
 LOGISTICS_BY_METHOD = {
+    "farmer_delivery": {
+        "provider": "FreshRoute Logistics",
+        "prefix": "FR",
+        "status": "accepted",
+    },
     "courier": {
         "provider": "FreshRoute Logistics",
         "prefix": "FR",
         "status": "accepted",
     },
+    "partner_delivery": {
+        "provider": "FarmBox Delivery",
+        "prefix": "FB",
+        "status": "accepted",
+    },
     "post": {
         "provider": "FarmBox Delivery",
         "prefix": "FB",
+        "status": "accepted",
+    },
+    "pickup": {
+        "provider": "MarketPoint Logistics",
+        "prefix": "MP",
         "status": "accepted",
     },
     "market": {
