@@ -40,6 +40,27 @@ def test_healthz_reports_database_connection(client):
     assert response.json() == {"ok": True}
 
 
+def test_demo_order_totals_use_effective_product_prices(client):
+    from database import SessionLocal
+    from marketplace_utils import effective_product_price
+    from models import Order
+
+    db = SessionLocal()
+    try:
+        demo_orders = db.query(Order).filter(Order.order_number.like("FM-DEMO-%")).all()
+        assert demo_orders
+        for order in demo_orders:
+            goods_total = sum(
+                effective_product_price(item.product) * int(item.quantity or 0)
+                for item in order.items
+                if item.product
+            )
+            expected = goods_total - Decimal(order.discount_amount or 0) + Decimal(order.delivery_fee or 0)
+            assert Decimal(order.total_price or 0) == expected
+    finally:
+        db.close()
+
+
 def test_register_validates_inputs(client):
     bad_email = client.post("/register", data=_register_data("not-an-email", "abcdef"))
     assert bad_email.status_code == 200

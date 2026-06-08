@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from auth import hash_password
 from farmer_applications import ensure_seller_application_number
+from marketplace_utils import effective_product_price
 from models import (
     FarmCertificate,
     Order,
@@ -21,7 +22,7 @@ from models import (
 )
 
 DEMO_CATALOG_SEED_KEY = "demo_catalog_seed_version"
-DEMO_CATALOG_SEED_VERSION = "v2"
+DEMO_CATALOG_SEED_VERSION = "v3"
 
 IMAGES = {
     "Овощи": "/static/product-images/vegetables-herbs.jpg",
@@ -308,12 +309,15 @@ def _seed_hit_orders(db: Session, hit_products: list[tuple[Product, int]]) -> No
     buyer = db.query(User).filter(User.email == "user@farm.local").first()
     if not buyer or not hit_products:
         return
+    if db.query(Order).filter(Order.order_number.like("FM-DEMO-%")).first():
+        return
     for product, quantity in hit_products:
         if quantity <= 0:
             continue
+        line_total = effective_product_price(product) * quantity
         order = Order(
             user_id=buyer.id,
-            total_price=Decimal(str(float(product.price) * quantity)),
+            total_price=line_total,
             status="completed",
             payment_status="paid",
             paid_at=datetime.utcnow(),
@@ -325,6 +329,23 @@ def _seed_hit_orders(db: Session, hit_products: list[tuple[Product, int]]) -> No
         db.flush()
         order.order_number = f"FM-DEMO-{order.id:05d}"
         db.add(OrderItem(order_id=order.id, product_id=product.id, quantity=quantity))
+
+
+def _recalculate_demo_order_totals(db: Session) -> None:
+    demo_orders = (
+        db.query(Order)
+        .filter(Order.order_number.like("FM-DEMO-%"))
+        .all()
+    )
+    for order in demo_orders:
+        goods_total = sum(
+            effective_product_price(item.product) * int(item.quantity or 0)
+            for item in order.items
+            if item.product
+        )
+        discount = Decimal(order.discount_amount or 0)
+        delivery = Decimal(order.delivery_fee or 0)
+        order.total_price = max(Decimal("0"), goods_total - discount + delivery)
 
 
 def _seed_reviews(db: Session, products: list[Product]) -> None:
@@ -426,6 +447,7 @@ def seed_extended_demo_catalog(db: Session) -> None:
             hit_targets.append((product, hit_qty))
 
     _seed_hit_orders(db, hit_targets)
+    _recalculate_demo_order_totals(db)
     _seed_reviews(db, created_products)
     _seed_seller_reviews(db, sellers)
     _seed_certificates(db, sellers)
