@@ -1,5 +1,6 @@
 (function () {
     const h = React.createElement;
+    const YANDEX_TEST_PROVIDER = "\u042f\u043d\u0434\u0435\u043a\u0441 \u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 (\u0442\u0435\u0441\u0442)";
     const dataNode = document.getElementById("react-page-data");
     let props = {};
     if (dataNode) {
@@ -105,10 +106,20 @@
             courier: "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u043c",
             farmer_delivery: "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u043c",
             pickup: "\u0421\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437",
-            post: "\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u0441\u043a\u0430\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430",
-            partner_delivery: "\u041f\u0430\u0440\u0442\u043d\u0451\u0440\u0441\u043a\u0430\u044f \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0430",
+            post: YANDEX_TEST_PROVIDER,
+            partner_delivery: YANDEX_TEST_PROVIDER,
             market: "\u0412\u044b\u0434\u0430\u0447\u0430 \u043d\u0430 \u0440\u044b\u043d\u043a\u0435"
         }[value] || value || "";
+    }
+    function isYandexTestDelivery(method, provider, trackNumber) {
+        const value = String(method || "").trim();
+        const providerText = String(provider || "").trim();
+        const trackText = String(trackNumber || "").trim();
+        return value === "partner_delivery" || value === "post" || providerText === YANDEX_TEST_PROVIDER || /^YM\d+/i.test(trackText);
+    }
+    function YandexDeliveryBadge({ method, provider, trackNumber }) {
+        if (!isYandexTestDelivery(method, provider, trackNumber)) return null;
+        return h("span", { className: "react-yandex-delivery-badge" }, YANDEX_TEST_PROVIDER);
     }
     function deliveryPriceValue(value) {
         if (value && typeof value === "object") {
@@ -2510,12 +2521,13 @@
                     const optionPickup = option.method === "pickup";
                     const optionDelivery = option.method === "farmer_delivery" || option.method === "partner_delivery";
                     const optionPickupAddress = option.address || option.pickup_address || group.pickup_address || sellerPickupAddress(group.seller);
+                    const optionLabel = option.method === "partner_delivery" ? YANDEX_TEST_PROVIDER : option.label || deliveryMethodText(option.method);
                     return h("div", { key: option.method, className: `react-checkout-method${active ? " is-active" : ""}` }, [
                         h("button", {
                             type: "button",
                             className: `react-chip react-chip-button react-checkout-method-btn${active ? " active" : ""}`,
                             onClick: () => setChoice(key, { method: option.method })
-                        }, `${option.label || deliveryMethodText(option.method)} \u00b7 ${money(option.fee || 0)}`),
+                        }, `${optionLabel} \u00b7 ${money(option.fee || 0)}`),
                         active && optionPickup ? h(PickupAddressBlock, {
                             address: optionPickupAddress,
                             comment: option.comment || ""
@@ -2528,7 +2540,10 @@
                             required: true,
                             maxLength: 500
                         }) : null,
-                        active && option.method === "partner_delivery" ? h("p", { className: "react-muted react-checkout-method-note" }, "\u0422\u0435\u0441\u0442\u043e\u0432\u0430\u044f \u042f\u043d\u0434\u0435\u043a\u0441 \u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0441\u043e\u0437\u0434\u0430\u0441\u0442 \u0434\u0435\u043c\u043e-\u0442\u0440\u0435\u043a \u043f\u043e\u0441\u043b\u0435 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f.") : null,
+                        active && option.method === "partner_delivery" ? h("div", { className: "react-yandex-delivery-card" }, [
+                            h(YandexDeliveryBadge, { method: option.method }),
+                            h("p", null, "\u041f\u043e\u0441\u043b\u0435 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f \u0441\u043e\u0437\u0434\u0430\u0434\u0438\u043c \u0442\u0435\u0441\u0442\u043e\u0432\u044b\u0439 \u0442\u0440\u0435\u043a \u0441 \u043f\u0440\u0435\u0444\u0438\u043a\u0441\u043e\u043c YM \u0438 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u043d\u0438\u0435.")
+                        ]) : null,
                         active && optionDelivery && option.comment ? h("p", { className: "react-muted react-checkout-method-note" }, option.comment) : null
                     ]);
                 })) : h("div", { className: "react-cart-min-order-warning" }, "\u0423 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430 \u043d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u044b \u0441\u043f\u043e\u0441\u043e\u0431\u044b \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f."),
@@ -3026,7 +3041,13 @@
                         order.delivery_slot ? h("p", { className: "react-muted" }, order.delivery_slot) : null,
                         trackNumber ? h("p", { className: "react-muted" }, `\u0422\u0440\u0435\u043a-\u043d\u043e\u043c\u0435\u0440: ${trackNumber}`) : null
                     ]),
-                    (deliveryProvider || trackNumber) ? h("div", { className: "react-card react-logistics-card" }, [h("b", null, "Логистика"), h("p", null, deliveryProvider || "Служба доставки"), trackNumber ? h("p", { className: "react-track-number" }, `Трек: ${trackNumber}`) : null, trackNumber ? ButtonLink({ href: trackingUrl, className: "secondary" }, "Отследить") : null]) : null,
+                    (deliveryProvider || trackNumber) ? h("div", { className: "react-card react-logistics-card" }, [
+                        h("b", null, "Логистика"),
+                        h(YandexDeliveryBadge, { method: order.delivery_method, provider: deliveryProvider, trackNumber }),
+                        h("p", null, deliveryProvider || "Служба доставки"),
+                        trackNumber ? h("p", { className: "react-track-number" }, `Трек: ${trackNumber}`) : null,
+                        trackNumber ? ButtonLink({ href: trackingUrl, className: "secondary" }, "Отследить") : null
+                    ]) : null,
                     h("div", { className: "react-card" }, [h("b", null, "\u041e\u043f\u043b\u0430\u0442\u0430"), h("p", null, paymentMethodText(order.selected_payment_method) || "\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u0430"), h("p", { className: "react-muted" }, paymentStatusText(order.payment_status)), order.customer_comment ? h("p", { className: "react-muted" }, order.customer_comment) : null]),
                     h("div", { className: "react-card" }, [h("b", null, "\u0421\u0443\u043c\u043c\u044b"), h("p", null, `\u0422\u043e\u0432\u0430\u0440\u044b: ${money(goodsTotal)}`), discount > 0 ? h("p", { className: "react-muted" }, `\u0421\u043a\u0438\u0434\u043a\u0430: -${money(discount)}`) : null, h("p", { className: "react-muted" }, `\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430: ${money(deliveryPrice)}`), h("p", { className: "react-price" }, `\u0418\u0442\u043e\u0433: ${money(order.total_price)}`)])
                 ]),
@@ -3190,8 +3211,9 @@
                             ? h(PickupAddressBlock, { address: orderPickupAddress(order) || "\u0410\u0434\u0440\u0435\u0441 \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d" })
                             : h("p", { className: "react-muted" }, order.delivery_address || "-"),
                         order.delivery_slot ? h("p", { className: "react-muted" }, order.delivery_slot) : null,
+                        h(YandexDeliveryBadge, { method: order.delivery_method, provider: order.delivery_provider, trackNumber: order.delivery_track_number }),
                         order.delivery_provider ? h("p", { className: "react-muted" }, `Логистика: ${order.delivery_provider}`) : null,
-                        order.delivery_track_number ? h("p", { className: "react-muted" }, `Трек: ${order.delivery_track_number}`) : null,
+                        order.delivery_track_number ? h("p", { className: "react-track-number" }, `Трек: ${order.delivery_track_number}`) : null,
                         order.delivery_track_number ? ButtonLink({ href: order.delivery_tracking_url || `/delivery/track/${order.delivery_track_number}`, className: "secondary" }, "Отследить") : null
                     ]),
                     h("div", { className: "react-card" }, [
@@ -3569,6 +3591,7 @@
                     h("div", { className: "react-card" }, [
                         h("b", null, "\u0422\u0440\u0435\u043a\u0438\u043d\u0433"),
                         h("p", null, deliveryStatusText({ ...order, delivery })),
+                        h(YandexDeliveryBadge, { method, provider: delivery.provider, trackNumber }),
                         trackNumber ? h("p", { className: "react-muted" }, trackNumber) : h("p", { className: "react-muted" }, "\u0422\u0440\u0435\u043a-\u043d\u043e\u043c\u0435\u0440 \u0435\u0449\u0435 \u043d\u0435 \u0432\u044b\u0434\u0430\u043d"),
                         trackUrl ? ButtonLink({ href: trackUrl, className: "secondary" }, "\u041e\u0442\u0441\u043b\u0435\u0434\u0438\u0442\u044c") : null
                     ])
@@ -4497,6 +4520,7 @@
         };
         const status = delivery.status || "created";
         const statusRank = stepOrder[status] || 0;
+        const deliveryMethod = order.delivery_method || delivery.method || "";
 
         return h("section", { className: "react-panel react-stack" }, [
             h("div", { className: "react-page-title" }, [
@@ -4507,7 +4531,7 @@
                 ButtonLink({ href: user && user.role === "seller" ? "/seller/orders" : "/order/orders", className: "secondary" }, "К заказам")
             ]),
             h("div", { className: "react-info-grid react-logistics-grid" }, [
-                h("div", { className: "react-card react-logistics-card" }, [h("b", null, "Логистическая компания"), h("p", null, delivery.provider || "Служба доставки")]),
+                h("div", { className: "react-card react-logistics-card" }, [h("b", null, "Логистическая компания"), h(YandexDeliveryBadge, { method: deliveryMethod, provider: delivery.provider, trackNumber: delivery.track_number }), h("p", null, delivery.provider || "Служба доставки")]),
                 h("div", { className: "react-card react-logistics-card" }, [h("b", null, "Трек-номер"), h("p", { className: "react-track-number" }, delivery.track_number || "-")]),
                 h("div", { className: "react-card react-logistics-card" }, [h("b", null, "Статус"), h("p", { className: "react-logistics-status" }, logisticsStatusText(status))]),
                 h("div", { className: "react-card react-logistics-card" }, [h("b", null, "Адрес"), h("p", null, delivery.address || order.delivery_address || "-")])
