@@ -276,6 +276,9 @@ def test_delivery_service_exposes_seller_options(client):
         methods = {option["method"] for option in options}
         assert "pickup" in methods
         assert "farmer_delivery" in methods
+        cdek_option = next(option for option in options if option["method"] == "partner_delivery")
+        assert cdek_option["label"] == "СДЭК (тест)"
+        assert "СДЭК" in cdek_option["comment"]
         assert seller_slots(seller)
         assert normalize_delivery_method("courier") == "farmer_delivery"
         assert normalize_delivery_method("post") == "partner_delivery"

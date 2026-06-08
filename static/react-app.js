@@ -2752,11 +2752,11 @@
                             ])
                         ]),
                         h("div", { className: "react-card react-stack" }, [
-                            h("h3", null, "Партнёрская доставка"),
-                            h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "partner_delivery_enabled", value: "1", defaultChecked: Number(seller.partner_delivery_enabled || 0) === 1 }), h("span", null, "Включить партнёрскую доставку")]),
-                            Field({ name: "partner_delivery_fee", type: "number", min: "0", step: "1", placeholder: "Стоимость партнёрской доставки", defaultValue: seller.partner_delivery_fee || 700 }),
-                            Textarea({ name: "partner_delivery_comment", placeholder: "Комментарий к партнёрской доставке", defaultValue: seller.partner_delivery_comment || "", rows: 3, maxLength: 1000 }),
-                            h("p", { className: "react-muted" }, "В учебной версии используется демонстрационный режим без подключения реального API")
+                            h("h3", null, "СДЭК (тест)"),
+                            h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "partner_delivery_enabled", value: "1", defaultChecked: Number(seller.partner_delivery_enabled || 0) === 1 }), h("span", null, "Предлагать СДЭК покупателям")]),
+                            Field({ name: "partner_delivery_fee", type: "number", min: "0", step: "1", placeholder: "Стоимость СДЭК", defaultValue: seller.partner_delivery_fee || 700 }),
+                            Textarea({ name: "partner_delivery_comment", placeholder: "Комментарий к СДЭК для покупателя", defaultValue: seller.partner_delivery_comment || "", rows: 3, maxLength: 1000 }),
+                            h("p", { className: "react-muted" }, "Если включено, покупатель увидит СДЭК (тест) в корзине у товаров этого фермера.")
                         ])
                     ]),
                     h("button", { className: "react-btn", type: "submit" }, "Сохранить настройки доставки")

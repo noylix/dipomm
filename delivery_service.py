@@ -26,10 +26,10 @@ def normalize_delivery_method(method: str | None) -> str:
 def delivery_label(method: str) -> str:
     return {
         "farmer_delivery": "Доставка фермером",
-        "partner_delivery": "Партнёрская доставка",
+        "partner_delivery": "СДЭК (тест)",
         "courier": "Доставка фермером",
         "pickup": "Самовывоз",
-        "post": "Партнёрская доставка",
+        "post": "СДЭК (тест)",
         "market": "Самовывоз",
     }.get(method, method)
 
@@ -81,10 +81,10 @@ def seller_delivery_options(seller: User | None, base_minimum: Decimal) -> list[
     if int(seller.partner_delivery_enabled or 0):
         options.append({
             "method": "partner_delivery",
-            "label": "Партнёрская доставка",
+            "label": "СДЭК (тест)",
             "fee": float(seller.partner_delivery_fee or 0),
             "requires_address": True,
-            "comment": seller.partner_delivery_comment or "Учебный режим партнёрской доставки без реального API.",
+            "comment": seller.partner_delivery_comment or "Фермер подключил тестовую доставку СДЭК. После оформления заказа будет создан тестовый трек.",
         })
     return options
 

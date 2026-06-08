@@ -791,7 +791,16 @@ def init_test_data():
         if not db.query(User).first():
             db.add_all([
                 User(email="admin@farm.local", password_hash=hash_password("admin123"), role="admin"),
-                User(email="seller@farm.local", password_hash=hash_password("seller123"), role="seller", is_approved=1, seller_application_status="approved"),
+                User(
+                    email="seller@farm.local",
+                    password_hash=hash_password("seller123"),
+                    role="seller",
+                    is_approved=1,
+                    seller_application_status="approved",
+                    partner_delivery_enabled=1,
+                    partner_delivery_fee=700,
+                    partner_delivery_comment="Фермер предлагает тестовую доставку СДЭК. После оформления заказа появится тестовый трек.",
+                ),
                 User(email="user@farm.local", password_hash=hash_password("user123"), role="user"),
                 User(email="manager@farm.local", password_hash=hash_password("manager123"), role="manager"),
                 User(email="misha@farm.local", password_hash=hash_password("misha123"), role="admin"),
@@ -826,6 +835,9 @@ def init_test_data():
                     role="seller",
                     is_approved=1,
                     seller_application_status="approved",
+                    partner_delivery_enabled=1,
+                    partner_delivery_fee=700,
+                    partner_delivery_comment="Фермер предлагает тестовую доставку СДЭК. После оформления заказа появится тестовый трек.",
                 )
                 db.add(seller_obj)
                 db.commit()
@@ -851,6 +863,12 @@ def init_test_data():
 
         seller_obj = db.query(User).filter(User.email == "seller@farm.local", User.role == "seller").first()
         if seller_obj:
+            seller_obj.partner_delivery_enabled = 1
+            seller_obj.partner_delivery_fee = seller_obj.partner_delivery_fee or 700
+            seller_obj.partner_delivery_comment = (
+                seller_obj.partner_delivery_comment
+                or "Фермер предлагает тестовую доставку СДЭК. После оформления заказа появится тестовый трек."
+            )
             demo_product_images = {
                 "Яблоки сезонные": "/static/product-images/fruits-berries.jpg",
                 "Картофель молодой": "/static/product-images/green-produce.jpg",

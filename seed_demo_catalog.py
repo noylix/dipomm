@@ -244,6 +244,12 @@ def _upsert_seller(db: Session, spec: dict) -> User:
     user.pickup_enabled = 1
     user.farmer_delivery_enabled = 1
     user.farmer_delivery_fee = user.farmer_delivery_fee or Decimal("350")
+    user.partner_delivery_enabled = 1
+    user.partner_delivery_fee = user.partner_delivery_fee or Decimal("700")
+    user.partner_delivery_comment = (
+        user.partner_delivery_comment
+        or "Фермер предлагает тестовую доставку СДЭК. После оформления заказа появится тестовый трек."
+    )
     user.product_categories = spec["product_categories"]
     user.farm_description = spec["farm_description"]
     user.farm_photo_url = spec["farm_photo_url"]
