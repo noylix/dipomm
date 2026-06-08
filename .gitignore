@@ -17,6 +17,7 @@ runtime_test_ok.db
 static/uploads/
 .tools/
 backups/
+docs/figures/.mpl/
 shot_*.png
 served_check.js
 committed_ref.js

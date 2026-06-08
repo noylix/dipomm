@@ -17,8 +17,12 @@ $excludedNames = @(
     ".venv312",
     "node_modules",
     "__pycache__",
+    "artifacts",
+    "docs",
     "outputs",
     "backups",
+    "scripts",
+    "tests",
     "static\uploads"
 )
 
@@ -26,6 +30,9 @@ $excludedFiles = @(
     ".env",
     "farm.db",
     "farmmarket.db",
+    "package-lock.json",
+    "package.json",
+    "requirements-dev.txt",
     "runtime_test_ok.db",
     "served_check.js",
     "committed_ref.js",
