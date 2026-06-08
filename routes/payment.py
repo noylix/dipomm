@@ -4,6 +4,7 @@
 import base64
 import json
 import os
+import re
 import uuid
 from datetime import datetime
 from urllib import request as urllib_request
@@ -18,6 +19,7 @@ from config import APP_BASE_URL, ENABLE_DEMO_PAYMENTS, ENABLE_SELLER_WALLET_DEPO
 from database import get_db
 from models import User, Wallet, Transaction, PaymentMethod, Order, OrderItem
 from auth import get_optional_user, check_role
+from marketplace_utils import effective_product_price
 from order_cancellation import restore_order_stock
 from order_statuses import is_order_payable, normalize_order_status
 from payment_refunds import refund_order_payment
@@ -32,6 +34,8 @@ WALLET_DISABLED_ROLES = frozenset({"user", "admin"})
 YOOKASSA_API_URL = "https://api.yookassa.ru/v3/payments"
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "")
+RECEIPT_VAT_CODE = int(os.getenv("YOOKASSA_RECEIPT_VAT_CODE", "1"))
+MONEY_QUANT = Decimal("0.01")
 
 
 def _seller_finance_url(tab: str = "finance") -> str:
@@ -80,6 +84,95 @@ def _yookassa_auth_header() -> str | None:
     return f"Basic {auth}"
 
 
+def _money_value(value: Decimal | int | float | str | None) -> str:
+    return f"{Decimal(value or 0).quantize(MONEY_QUANT):.2f}"
+
+
+def _receipt_description(value: str | None, fallback: str) -> str:
+    text = re.sub(r"\s+", " ", (value or fallback).strip())
+    return text[:128] or fallback
+
+
+def _receipt_customer(order: Order, user: User) -> dict[str, str]:
+    customer: dict[str, str] = {}
+    name = (order.customer_name or user.full_name or "").strip()
+    phone = re.sub(r"\D+", "", order.customer_phone or user.phone or "")
+    if name:
+        customer["full_name"] = name[:256]
+    if len(phone) >= 10:
+        normalized_phone = phone[-11:] if len(phone) > 10 else f"7{phone[-10:]}"
+        if normalized_phone.startswith("8"):
+            normalized_phone = f"7{normalized_phone[1:]}"
+        customer["phone"] = normalized_phone
+    if user.email:
+        customer["email"] = user.email
+    return customer
+
+
+def _receipt_item(description: str, amount: Decimal, quantity: Decimal = Decimal("1"), subject: str = "commodity") -> dict:
+    return {
+        "description": _receipt_description(description, "Заказ"),
+        "quantity": float(quantity),
+        "amount": {
+            "value": _money_value(amount),
+            "currency": "RUB",
+        },
+        "vat_code": RECEIPT_VAT_CODE,
+        "payment_mode": "full_prepayment",
+        "payment_subject": subject,
+    }
+
+
+def _build_yookassa_receipt(order: Order, user: User, amount: Decimal) -> dict:
+    total = Decimal(amount or 0).quantize(MONEY_QUANT)
+    delivery_fee = Decimal(order.delivery_fee or 0).quantize(MONEY_QUANT)
+    discount = Decimal(order.discount_amount or 0).quantize(MONEY_QUANT)
+    raw_items: list[tuple[str, Decimal]] = []
+
+    for order_item in order.items:
+        product = order_item.product
+        quantity = Decimal(int(order_item.quantity or 0))
+        if not product or quantity <= 0:
+            continue
+        line_amount = (Decimal(effective_product_price(product)) * quantity).quantize(MONEY_QUANT)
+        if line_amount > 0:
+            raw_items.append((_receipt_description(product.name, f"Товар #{order_item.product_id}"), line_amount))
+
+    goods_total = sum((line_amount for _, line_amount in raw_items), Decimal("0.00")).quantize(MONEY_QUANT)
+    if discount > 0 and goods_total > 0:
+        adjusted_items: list[tuple[str, Decimal]] = []
+        remaining = max(Decimal("0.00"), goods_total - discount).quantize(MONEY_QUANT)
+        for index, (description, line_amount) in enumerate(raw_items):
+            if index == len(raw_items) - 1:
+                adjusted = remaining
+            else:
+                share = (line_amount / goods_total * discount).quantize(MONEY_QUANT)
+                adjusted = max(Decimal("0.01"), line_amount - share).quantize(MONEY_QUANT)
+                remaining = (remaining - adjusted).quantize(MONEY_QUANT)
+            if adjusted > 0:
+                adjusted_items.append((description, adjusted))
+        raw_items = adjusted_items
+
+    items = [_receipt_item(description, line_amount) for description, line_amount in raw_items if line_amount > 0]
+    if delivery_fee > 0:
+        items.append(_receipt_item("Доставка заказа", delivery_fee, subject="service"))
+
+    items_total = sum((Decimal(item["amount"]["value"]) for item in items), Decimal("0.00")).quantize(MONEY_QUANT)
+    delta = (total - items_total).quantize(MONEY_QUANT)
+    if items and delta:
+        last_amount = (Decimal(items[-1]["amount"]["value"]) + delta).quantize(MONEY_QUANT)
+        if last_amount > 0:
+            items[-1]["amount"]["value"] = _money_value(last_amount)
+    if not items or sum((Decimal(item["amount"]["value"]) for item in items), Decimal("0.00")).quantize(MONEY_QUANT) != total:
+        items = [_receipt_item(f"Заказ #{order.id}", total)]
+
+    return {
+        "customer": _receipt_customer(order, user),
+        "items": items,
+        "internet": True,
+    }
+
+
 def _fetch_yookassa_payment(payment_id: str) -> tuple[dict | None, str]:
     auth_header = _yookassa_auth_header()
     if not auth_header:
@@ -120,6 +213,7 @@ def _create_yookassa_payment(
             "order_id": str(order.id),
             "user_id": str(user.id),
         },
+        "receipt": _build_yookassa_receipt(order, user, amount),
     }
     auth_header = _yookassa_auth_header()
     if not auth_header:

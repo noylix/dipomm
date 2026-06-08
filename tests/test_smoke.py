@@ -588,6 +588,46 @@ def test_order_payment_rejects_manual_cash_bypass(client):
         db.close()
 
 
+def test_yookassa_payment_payload_contains_legal_receipt(client):
+    from database import SessionLocal
+    from models import Order, OrderItem, Product, User
+    from routes.payment import _build_yookassa_receipt
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        product = db.query(Product).filter(Product.status == "approved").first()
+        assert product is not None
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("1234.00"),
+            delivery_fee=Decimal("234.00"),
+            discount_amount=Decimal("0.00"),
+            customer_name="Test Buyer",
+            customer_phone="+7 999 123-45-67",
+        )
+        db.add(order)
+        db.flush()
+        product.price = Decimal("500.00")
+        product.discount_price = None
+        db.add(OrderItem(order_id=order.id, product_id=product.id, quantity=2))
+        db.flush()
+
+        receipt = _build_yookassa_receipt(order, buyer, Decimal("1234.00"))
+        items_total = sum(Decimal(item["amount"]["value"]) for item in receipt["items"])
+
+        assert receipt["customer"]["email"] == buyer.email
+        assert receipt["customer"]["phone"] == "79991234567"
+        assert receipt["internet"] is True
+        assert items_total == Decimal("1234.00")
+        assert all(item["vat_code"] == 1 for item in receipt["items"])
+        assert all(item["payment_mode"] == "full_prepayment" for item in receipt["items"])
+        assert {item["payment_subject"] for item in receipt["items"]} == {"commodity", "service"}
+    finally:
+        db.rollback()
+        db.close()
+
+
 def test_yookassa_webhook_does_not_trust_unverified_payload(client, monkeypatch):
     from database import SessionLocal
     from models import Order, Transaction, User, Wallet
