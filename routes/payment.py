@@ -512,7 +512,57 @@ def process_payment(
 
 
 @router.get("/yookassa/return")
-def yookassa_return(request: Request):
+def yookassa_return(request: Request, db: Session = Depends(get_db)):
+    user = get_optional_user(request, db)
+    if user:
+        pending_transactions = (
+            db.query(Transaction)
+            .filter(
+                Transaction.user_id == user.id,
+                Transaction.payment_method == "yookassa",
+                Transaction.status == "pending",
+            )
+            .order_by(Transaction.id.desc())
+            .limit(5)
+            .all()
+        )
+        for tx in pending_transactions:
+            if not tx.external_id or not tx.order_id:
+                continue
+            order = db.query(Order).filter(Order.id == tx.order_id, Order.user_id == user.id).first()
+            if not order:
+                continue
+            verified_payment, verify_error = _fetch_yookassa_payment(str(tx.external_id))
+            if verify_error or not verified_payment:
+                continue
+            verified_metadata = verified_payment.get("metadata") or {}
+            verified_amount = verified_payment.get("amount") or {}
+            if verified_payment.get("status") == "canceled":
+                tx.status = "failed"
+                db.commit()
+                request.session["payment_error"] = "Платеж ЮKassa отменен."
+                return RedirectResponse(url="/order/orders", status_code=303)
+            try:
+                verified_value = Decimal(str(verified_amount.get("value", "0"))).quantize(Decimal("0.01"))
+                order_value = Decimal(order.total_price or 0).quantize(Decimal("0.01"))
+            except Exception:
+                continue
+            if (
+                verified_payment.get("status") == "succeeded"
+                and verified_payment.get("paid") is True
+                and str(verified_payment.get("id")) == str(tx.external_id)
+                and str(verified_metadata.get("order_id")) == str(order.id)
+                and str(verified_metadata.get("user_id")) == str(order.user_id)
+                and verified_amount.get("currency") == "RUB"
+                and verified_value == order_value
+            ):
+                if is_order_payable(order.status, order.payment_status):
+                    _mark_order_paid(order, str(tx.external_id), db)
+                tx.status = "completed"
+                db.commit()
+                request.session["payment_success"] = f"Заказ #{order.id} оплачен через ЮKassa."
+                return RedirectResponse(url="/order/orders", status_code=303)
+
     request.session["payment_success"] = "Платеж ЮKassa отправлен на проверку."
     return RedirectResponse(url="/order/orders", status_code=303)
 

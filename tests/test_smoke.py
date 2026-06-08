@@ -619,6 +619,68 @@ def test_yookassa_cancel_webhook_does_not_fail_unverified_payment(client, monkey
         db.close()
 
 
+def test_yookassa_return_confirms_verified_payment(client, monkeypatch):
+    from database import SessionLocal
+    from models import Order, Transaction, User, Wallet
+
+    client.cookies.clear()
+    client.post("/login", data={"email": "user@farm.local", "password": "user123"})
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        wallet = Wallet(user_id=buyer.id, balance=0)
+        db.add(wallet)
+        db.flush()
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("444.00"),
+            status="awaiting_payment",
+            payment_status="pending",
+            selected_payment_method="yookassa",
+        )
+        db.add(order)
+        db.flush()
+        db.add(Transaction(
+            wallet_id=wallet.id,
+            user_id=buyer.id,
+            order_id=order.id,
+            amount=Decimal("444.00"),
+            type="payment",
+            status="pending",
+            payment_method="yookassa",
+            external_id="verified_payment_from_return",
+        ))
+        db.commit()
+        order_id = order.id
+        buyer_id = buyer.id
+    finally:
+        db.close()
+
+    monkeypatch.setattr("routes.payment._fetch_yookassa_payment", lambda payment_id: ({
+        "id": payment_id,
+        "status": "succeeded",
+        "paid": True,
+        "amount": {"value": "444.00", "currency": "RUB"},
+        "metadata": {"order_id": str(order_id), "user_id": str(buyer_id)},
+    }, ""))
+
+    response = client.get("/payment/yookassa/return")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/order/orders"
+
+    db = SessionLocal()
+    try:
+        saved = db.query(Order).filter(Order.id == order_id).one()
+        tx = db.query(Transaction).filter(Transaction.order_id == order_id).one()
+        assert saved.payment_status == "paid"
+        assert saved.status == "confirmed"
+        assert saved.payment_id == "verified_payment_from_return"
+        assert tx.status == "completed"
+    finally:
+        db.close()
+
+
 def test_seller_wallet_self_deposit_disabled_by_default(client):
     from database import SessionLocal
     from models import Transaction, User, WithdrawalRequest
