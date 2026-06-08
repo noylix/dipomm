@@ -53,6 +53,12 @@ def review_create(
         Review.order_id == order_id
     ).first()
     if existing:
+        request.session["payment_error"] = "Вы уже оставили отзыв на этот товар по этому заказу."
+        return RedirectResponse("/order/orders", status_code=303)
+
+    text = (text or "").strip()
+    if len(text) < 5:
+        request.session["payment_error"] = "Напишите короткий отзыв о товаре."
         return RedirectResponse("/order/orders", status_code=303)
 
     review = Review(
@@ -60,11 +66,12 @@ def review_create(
         product_id=product_id,
         order_id=order_id,
         rating=max(1, min(5, rating)),
-        text=text,
-        status="pending"
+        text=text[:2000],
+        status="pending",
     )
     db.add(review)
     db.commit()
+    request.session["order_success"] = "Отзыв о товаре отправлен на модерацию."
     return RedirectResponse("/order/orders", status_code=303)
 
 

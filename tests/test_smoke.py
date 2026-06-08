@@ -200,6 +200,60 @@ def test_seller_admin_accountant_get_dashboards(client):
         assert response.status_code == 200, f"{email} {dashboard} -> {response.status_code}"
 
 
+def test_buyer_can_submit_product_review_for_completed_order(client):
+    from database import SessionLocal
+    from models import Order, Review, User
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        order = (
+            db.query(Order)
+            .filter(Order.user_id == buyer.id, Order.status == "completed")
+            .order_by(Order.id.desc())
+            .first()
+        )
+        assert order and order.items
+        product_id = order.items[0].product_id
+        db.query(Review).filter(
+            Review.user_id == order.user_id,
+            Review.order_id == order.id,
+            Review.product_id == product_id,
+        ).delete()
+        db.commit()
+        order_id = order.id
+    finally:
+        db.close()
+
+    client.cookies.clear()
+    client.post("/login", data={"email": "user@farm.local", "password": "user123"})
+    response = client.post("/reviews/create", data={
+        "order_id": str(order_id),
+        "product_id": str(product_id),
+        "rating": "5",
+        "text": "Свежий товар, заказом доволен.",
+    })
+    assert response.status_code == 303
+    assert response.headers["location"] == "/order/orders"
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        review = db.query(Review).filter(
+            Review.user_id == buyer.id,
+            Review.order_id == order_id,
+            Review.product_id == product_id,
+        ).one()
+        assert review.status == "pending"
+        assert review.text == "Свежий товар, заказом доволен."
+    finally:
+        db.close()
+
+    orders_page = client.get("/order/orders")
+    assert orders_page.status_code == 200
+    assert _contains(orders_page.text, "Отзыв о товаре отправлен на модерацию.")
+
+
 def test_buyer_order_pages_render_with_delivery(client):
     client.cookies.clear()
     client.post("/login", data={"email": "user@farm.local", "password": "user123"})
