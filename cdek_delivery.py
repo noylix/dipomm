@@ -292,6 +292,8 @@ def fetch_cdek_order(uuid_or_cdek_number: str) -> dict[str, object]:
     value = (uuid_or_cdek_number or "").strip()
     if not value:
         raise RuntimeError("CDEK order identifier is empty")
-    query_key = "uuid" if "-" in value else "cdek_number"
-    data = _authorized_request(f"/orders?{parse.urlencode({query_key: value})}", timeout=15)
+    if "-" in value:
+        data = _authorized_request(f"/orders/{parse.quote(value)}", timeout=15)
+    else:
+        data = _authorized_request(f"/orders?{parse.urlencode({'cdek_number': value})}", timeout=15)
     return data.get("entity") or data
