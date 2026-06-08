@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime
-from urllib import parse, request
+from urllib import error, parse, request
 
 from models import Order, Product
 
@@ -119,8 +119,12 @@ def _authorized_request(path: str, method: str = "GET", payload: dict | None = N
         headers=headers,
         method=method,
     )
-    with request.urlopen(api_request, timeout=timeout) as response:
-        raw = response.read().decode("utf-8")
+    try:
+        with request.urlopen(api_request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+    except error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"CDEK API returned {exc.code}: {body}") from exc
     return json.loads(raw) if raw else {}
 
 
@@ -256,7 +260,6 @@ def create_cdek_order(
         "tariff_code": cdek_tariff_code(delivery_type),
         "comment": (order.customer_comment or "Заказ Свои Ряды")[:255],
         "from_location": {"code": CDEK_FROM_CITY_CODE},
-        "to_location": {"code": int(to_city_code)},
         "recipient": {
             "name": (order.customer_name or "Покупатель")[:255],
             "phones": [{"number": _phone_number(order)}],
@@ -271,7 +274,7 @@ def create_cdek_order(
     else:
         if not address:
             raise RuntimeError("CDEK recipient address is required")
-        payload["to_location"]["address"] = address.strip()
+        payload["to_location"] = {"code": int(to_city_code), "address": address.strip()}
 
     data = _authorized_request("/orders", method="POST", payload=payload, timeout=25)
     entity = data.get("entity") or data
