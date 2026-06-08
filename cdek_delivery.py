@@ -11,7 +11,8 @@ from models import Order, Product
 
 
 CDEK_DELIVERY_METHODS = {"partner_delivery", "post"}
-CDEK_PROVIDER_NAME = "\u0421\u0414\u042d\u041a (\u0442\u0435\u0441\u0442)"
+CDEK_PROVIDER_NAME = "\u0421\u0414\u042d\u041a"
+CDEK_LEGACY_PROVIDER_NAMES = {"\u0421\u0414\u042d\u041a (\u0442\u0435\u0441\u0442)"}
 CDEK_TRACK_PREFIX = "CDEK"
 CDEK_TEST_STATUS = "accepted"
 CDEK_API_BASE_URL = os.getenv("CDEK_API_BASE_URL", "https://api.edu.cdek.ru/v2").rstrip("/")
@@ -58,6 +59,10 @@ def _shipment_suffix(order: Order) -> str:
 
 def is_cdek_delivery_method(method: str | None) -> bool:
     return (method or "").strip() in CDEK_DELIVERY_METHODS
+
+
+def is_cdek_provider(provider: str | None) -> bool:
+    return (provider or "").strip() in {CDEK_PROVIDER_NAME, *CDEK_LEGACY_PROVIDER_NAMES}
 
 
 def create_test_cdek_shipment(order: Order) -> CdekDeliveryShipment:

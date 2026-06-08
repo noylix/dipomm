@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from decimal import Decimal
 from config import APP_BASE_URL, ENABLE_DEMO_PAYMENTS, ENABLE_SELLER_WALLET_DEPOSITS, IS_PRODUCTION
 
-from cdek_delivery import CDEK_PROVIDER_NAME, create_cdek_order
+from cdek_delivery import create_cdek_order, is_cdek_provider
 from database import get_db
 from models import User, Wallet, Transaction, PaymentMethod, Order, OrderItem
 from auth import get_optional_user, check_role
@@ -54,7 +54,7 @@ def _redirect_if_wallet_disabled(user: User | None, request: Request) -> Redirec
 
 def _create_cdek_shipment_after_payment(order: Order) -> None:
     delivery = order.delivery
-    if not delivery or delivery.provider != CDEK_PROVIDER_NAME:
+    if not delivery or not is_cdek_provider(delivery.provider):
         return
     external_id = (delivery.external_id or "").strip()
     if not external_id.startswith("CDEK-PENDING:"):

@@ -1,6 +1,7 @@
 (function () {
     const h = React.createElement;
-    const CDEK_TEST_PROVIDER = "\u0421\u0414\u042d\u041a (\u0442\u0435\u0441\u0442)";
+    const CDEK_PROVIDER = "\u0421\u0414\u042d\u041a";
+    const CDEK_LEGACY_PROVIDER = "\u0421\u0414\u042d\u041a (\u0442\u0435\u0441\u0442)";
     const dataNode = document.getElementById("react-page-data");
     let props = {};
     if (dataNode) {
@@ -106,8 +107,8 @@
             courier: "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u043c",
             farmer_delivery: "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0444\u0435\u0440\u043c\u0435\u0440\u043e\u043c",
             pickup: "\u0421\u0430\u043c\u043e\u0432\u044b\u0432\u043e\u0437",
-            post: CDEK_TEST_PROVIDER,
-            partner_delivery: CDEK_TEST_PROVIDER,
+            post: CDEK_PROVIDER,
+            partner_delivery: CDEK_PROVIDER,
             market: "\u0412\u044b\u0434\u0430\u0447\u0430 \u043d\u0430 \u0440\u044b\u043d\u043a\u0435"
         }[value] || value || "";
     }
@@ -115,11 +116,11 @@
         const value = String(method || "").trim();
         const providerText = String(provider || "").trim();
         const trackText = String(trackNumber || "").trim();
-        return value === "partner_delivery" || value === "post" || providerText === CDEK_TEST_PROVIDER || /^CDEK/i.test(trackText);
+        return value === "partner_delivery" || value === "post" || providerText === CDEK_PROVIDER || providerText === CDEK_LEGACY_PROVIDER || /^CDEK/i.test(trackText);
     }
     function CdekDeliveryBadge({ method, provider, trackNumber }) {
         if (!isCdekTestDelivery(method, provider, trackNumber)) return null;
-        return h("span", { className: "react-cdek-delivery-badge" }, CDEK_TEST_PROVIDER);
+        return h("span", { className: "react-cdek-delivery-badge" }, CDEK_PROVIDER);
     }
     function deliveryPriceValue(value) {
         if (value && typeof value === "object") {
@@ -2609,7 +2610,7 @@
                     const optionPickup = option.method === "pickup";
                     const optionDelivery = option.method === "farmer_delivery" || option.method === "partner_delivery";
                     const optionPickupAddress = option.address || option.pickup_address || group.pickup_address || sellerPickupAddress(group.seller);
-                    const optionLabel = option.method === "partner_delivery" ? CDEK_TEST_PROVIDER : option.label || deliveryMethodText(option.method);
+                    const optionLabel = option.method === "partner_delivery" ? CDEK_PROVIDER : option.label || deliveryMethodText(option.method);
                     const optionFee = active ? selectedDeliveryFee(group, key, option.method) : Number(option.fee || 0);
                     return h("div", { key: option.method, className: `react-checkout-method${active ? " is-active" : ""}` }, [
                         h("button", {
@@ -2874,11 +2875,11 @@
                             ])
                         ]),
                         h("div", { className: "react-card react-stack" }, [
-                            h("h3", null, "СДЭК (тест)"),
+                            h("h3", null, "СДЭК"),
                             h("label", { className: "react-checkbox-row" }, [h("input", { type: "checkbox", name: "partner_delivery_enabled", value: "1", defaultChecked: Number(seller.partner_delivery_enabled || 0) === 1 }), h("span", null, "Предлагать СДЭК покупателям")]),
                             Field({ name: "partner_delivery_fee", type: "number", min: "0", step: "1", placeholder: "Стоимость СДЭК", defaultValue: seller.partner_delivery_fee || 700 }),
                             Textarea({ name: "partner_delivery_comment", placeholder: "Комментарий к СДЭК для покупателя", defaultValue: seller.partner_delivery_comment || "", rows: 3, maxLength: 1000 }),
-                            h("p", { className: "react-muted" }, "Если включено, покупатель увидит СДЭК (тест) в корзине у товаров этого фермера.")
+                            h("p", { className: "react-muted" }, "Если включено, покупатель увидит СДЭК в корзине у товаров этого фермера. Стоимость будет рассчитана через API СДЭК.")
                         ])
                     ]),
                     h("button", { className: "react-btn", type: "submit" }, "Сохранить настройки доставки")

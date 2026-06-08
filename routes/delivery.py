@@ -10,6 +10,7 @@ from cdek_delivery import (
     fetch_cdek_delivery_points,
     fetch_cdek_order,
     cdek_order_status,
+    is_cdek_provider,
     search_cdek_cities,
 )
 from database import get_db
@@ -102,7 +103,7 @@ def delivery_track(track_number: str, request: Request, db: Session = Depends(ge
     if not owns_delivery:
         return RedirectResponse("/", status_code=303)
 
-    if delivery.provider == CDEK_PROVIDER_NAME and delivery.external_id:
+    if is_cdek_provider(delivery.provider) and delivery.external_id:
         try:
             cdek_order = fetch_cdek_order(delivery.external_id)
             entity = cdek_order.get("entity") or cdek_order

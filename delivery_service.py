@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from cdek_delivery import create_test_cdek_shipment
+from cdek_delivery import CDEK_PROVIDER_NAME, create_test_cdek_shipment
 from models import Delivery, Order, User
 
 
@@ -26,10 +26,10 @@ def normalize_delivery_method(method: str | None) -> str:
 def delivery_label(method: str) -> str:
     return {
         "farmer_delivery": "Доставка фермером",
-        "partner_delivery": "СДЭК (тест)",
+        "partner_delivery": CDEK_PROVIDER_NAME,
         "courier": "Доставка фермером",
         "pickup": "Самовывоз",
-        "post": "СДЭК (тест)",
+        "post": CDEK_PROVIDER_NAME,
         "market": "Самовывоз",
     }.get(method, method)
 
@@ -81,10 +81,10 @@ def seller_delivery_options(seller: User | None, base_minimum: Decimal) -> list[
     if int(seller.partner_delivery_enabled or 0):
         options.append({
             "method": "partner_delivery",
-            "label": "СДЭК (тест)",
+            "label": CDEK_PROVIDER_NAME,
             "fee": float(seller.partner_delivery_fee or 0),
             "requires_address": True,
-            "comment": seller.partner_delivery_comment or "Фермер подключил тестовую доставку СДЭК. После оформления заказа будет создан тестовый трек.",
+            "comment": seller.partner_delivery_comment or "Фермер подключил доставку СДЭК. Стоимость рассчитывается через СДЭК, после оплаты будет создана накладная.",
         })
     return options
 

@@ -277,7 +277,7 @@ def test_delivery_service_exposes_seller_options(client):
         assert "pickup" in methods
         assert "farmer_delivery" in methods
         cdek_option = next(option for option in options if option["method"] == "partner_delivery")
-        assert cdek_option["label"] == "СДЭК (тест)"
+        assert cdek_option["label"] == "СДЭК"
         assert "СДЭК" in cdek_option["comment"]
         assert seller_slots(seller)
         assert normalize_delivery_method("courier") == "farmer_delivery"
@@ -435,8 +435,8 @@ def test_paid_cdek_order_registers_real_shipment(monkeypatch):
         delivery = Delivery(
             order_id=order.id,
             method="partner_delivery",
-            provider="СДЭК (тест)",
-            provider_name="СДЭК (тест)",
+            provider="СДЭК",
+            provider_name="СДЭК",
             external_id="CDEK-PENDING:44:pickup:MSK1",
             track_number="CDEKTEST",
             tracking_url="/delivery/track/CDEKTEST",
