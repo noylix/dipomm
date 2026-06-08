@@ -1,8 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
 
+from cdek_delivery import create_test_cdek_shipment
 from models import Delivery, Order, User
-from yandex_delivery import create_test_yandex_shipment
 
 
 DELIVERY_METHODS = {"pickup", "farmer_delivery", "partner_delivery"}
@@ -121,10 +121,10 @@ def create_order_delivery(
     if normalized == "pickup":
         delivery.address = seller_pickup_address(seller) or None
     elif normalized == "partner_delivery":
-        yandex_shipment = create_test_yandex_shipment(order)
-        delivery.provider = yandex_shipment.provider
-        delivery.provider_name = yandex_shipment.provider
-        delivery.track_number = yandex_shipment.track_number
-        delivery.tracking_url = yandex_shipment.tracking_url
-        delivery.external_id = yandex_shipment.external_id
+        cdek_shipment = create_test_cdek_shipment(order)
+        delivery.provider = cdek_shipment.provider
+        delivery.provider_name = cdek_shipment.provider
+        delivery.track_number = cdek_shipment.track_number
+        delivery.tracking_url = cdek_shipment.tracking_url
+        delivery.external_id = cdek_shipment.external_id
     return delivery

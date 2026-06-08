@@ -1,8 +1,8 @@
 import hashlib
 from datetime import datetime
 
+from cdek_delivery import create_test_cdek_shipment, is_cdek_delivery_method
 from models import Delivery, Order
-from yandex_delivery import create_test_yandex_shipment, is_yandex_delivery_method
 
 
 LOGISTICS_BY_METHOD = {
@@ -50,8 +50,8 @@ def ensure_logistics_shipment(order: Order) -> Delivery | None:
         return None
 
     method = (order.delivery_method or delivery.method or "courier").strip()
-    if is_yandex_delivery_method(method):
-        shipment = create_test_yandex_shipment(order)
+    if is_cdek_delivery_method(method):
+        shipment = create_test_cdek_shipment(order)
         delivery.provider = shipment.provider
         delivery.provider_name = shipment.provider
         delivery.external_id = shipment.external_id

@@ -1757,7 +1757,7 @@ a.react-review-mod-product:hover {
     background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
 }
 
-.react-yandex-delivery-badge {
+.react-cdek-delivery-badge {
     display: inline-flex;
     align-items: center;
     width: fit-content;
@@ -1772,7 +1772,7 @@ a.react-review-mod-product:hover {
     line-height: 1.2;
 }
 
-.react-yandex-delivery-card {
+.react-cdek-delivery-card {
     width: 100%;
     max-width: 100%;
     margin-top: 10px;
@@ -1782,7 +1782,7 @@ a.react-review-mod-product:hover {
     background: #f6fbff;
 }
 
-.react-yandex-delivery-card p {
+.react-cdek-delivery-card p {
     margin: 0;
     color: rgba(30, 36, 27, 0.72);
     line-height: 1.45;

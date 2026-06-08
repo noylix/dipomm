@@ -54,7 +54,7 @@ from order_statuses import (
     is_order_receivable,
     normalize_order_status,
 )
-from yandex_delivery import create_test_yandex_shipment
+from cdek_delivery import create_test_cdek_shipment
 
 router = APIRouter(prefix="/order", tags=["order"])
 
@@ -515,12 +515,12 @@ async def order_create(request: Request, db: Session = Depends(get_db)):
         if group["method"] == "pickup":
             delivery.address = _seller_pickup_address(group["seller"]) or None
         elif group["method"] == "partner_delivery":
-            yandex_shipment = create_test_yandex_shipment(order)
-            delivery.provider = yandex_shipment.provider
-            delivery.provider_name = yandex_shipment.provider
-            delivery.track_number = yandex_shipment.track_number
-            delivery.tracking_url = yandex_shipment.tracking_url
-            delivery.external_id = yandex_shipment.external_id
+            cdek_shipment = create_test_cdek_shipment(order)
+            delivery.provider = cdek_shipment.provider
+            delivery.provider_name = cdek_shipment.provider
+            delivery.track_number = cdek_shipment.track_number
+            delivery.tracking_url = cdek_shipment.tracking_url
+            delivery.external_id = cdek_shipment.external_id
         db.add(delivery)
 
         for item in group["items"]:

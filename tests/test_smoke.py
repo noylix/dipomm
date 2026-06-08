@@ -287,7 +287,7 @@ def test_logistics_supports_current_delivery_methods(client):
     from database import SessionLocal
     from logistics import ensure_logistics_shipment
     from models import Delivery, Order, User
-    from yandex_delivery import YANDEX_PROVIDER_NAME, create_test_yandex_shipment
+    from cdek_delivery import CDEK_PROVIDER_NAME, create_test_cdek_shipment
 
     db = SessionLocal()
     try:
@@ -330,15 +330,15 @@ def test_logistics_supports_current_delivery_methods(client):
         db.add(partner_delivery)
         db.flush()
 
-        yandex_preview = create_test_yandex_shipment(partner_order)
-        yandex_shipment = ensure_logistics_shipment(partner_order)
-        assert yandex_shipment is partner_delivery
-        assert yandex_shipment.provider == YANDEX_PROVIDER_NAME
-        assert yandex_shipment.provider_name == YANDEX_PROVIDER_NAME
-        assert yandex_shipment.external_id == yandex_preview.external_id
-        assert yandex_shipment.track_number == yandex_preview.track_number
-        assert yandex_shipment.track_number.startswith("YM")
-        assert yandex_shipment.tracking_url == f"/delivery/track/{yandex_shipment.track_number}"
+        cdek_preview = create_test_cdek_shipment(partner_order)
+        cdek_shipment = ensure_logistics_shipment(partner_order)
+        assert cdek_shipment is partner_delivery
+        assert cdek_shipment.provider == CDEK_PROVIDER_NAME
+        assert cdek_shipment.provider_name == CDEK_PROVIDER_NAME
+        assert cdek_shipment.external_id == cdek_preview.external_id
+        assert cdek_shipment.track_number == cdek_preview.track_number
+        assert cdek_shipment.track_number.startswith("CDEK")
+        assert cdek_shipment.tracking_url == f"/delivery/track/{cdek_shipment.track_number}"
     finally:
         db.rollback()
         db.close()
