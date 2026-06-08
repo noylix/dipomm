@@ -202,9 +202,15 @@
     function logisticsStatusText(value) {
         return ({
             created: "Создана",
+            waiting_payment: "Ожидает оплаты",
+            waiting_assembly: "Ожидает сборки",
+            ready_for_pickup: "Готова к самовывозу",
+            ready_for_delivery: "Готова к доставке",
+            transferred_to_delivery: "Передана в доставку",
             accepted: "Принята перевозчиком",
             in_transit: "В пути",
             delivered: "Доставлена",
+            cancelled: "Отменена",
             manual: "Без внешней службы"
         })[value] || value || "-";
     }
@@ -3521,36 +3527,79 @@
             ])
         ]);
     }
-    function AdminOrdersTable({ orders, orderStatuses, statusLabels }) {
+    function AdminOrdersTable({ orders, orderStatuses, statusLabels, clientOrdersByUser }) {
         const list = orders || [];
         if (!list.length) return h("div", { className: "react-empty react-panel" }, "\u0417\u0430\u043a\u0430\u0437\u043e\u0432 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442.");
-        return h("section", { className: "react-stack" }, list.map(order => h("div", { key: order.id, id: `order-${order.id}`, className: "react-panel" }, [
-            h("div", { className: "react-page-title" }, [
-                h("h2", null, `\u0417\u0430\u043a\u0430\u0437 #${order.id}`),
-                h("strong", null, h(PriceDisplay, { product: { price: order.total_price }, compact: true, inline: true }))
-            ]),
-            h("div", { className: "react-chip-row" }, [
-                h(StatusChip, { value: order.status, label: statusLabels && statusLabels[order.status] ? statusLabels[order.status] : (order.status || "created") }),
-                h(StatusChip, { value: order.payment_status, label: paymentStatusText(order.payment_status) })
-            ]),
-            isOrderCancelled(order) && (order.return_reason || order.seller_cancel_reason)
-                ? h("p", { className: "react-muted" }, order.return_reason || order.seller_cancel_reason)
-                : null,
-            h("table", { className: "react-table" }, h("tbody", null, (order.items || []).map(item => h("tr", { key: item.id }, [
-                h("td", null, item.product ? h(ProductMiniPreview, { product: item.product }) : "\u0422\u043e\u0432\u0430\u0440"),
-                h("td", null, item.quantity),
-                h("td", null, item.product ? h(PriceDisplay, { product: item.product, compact: true, inline: true }) : ""),
-                h("td", null, item.product ? money(productFinalPrice(item.product) * Number(item.quantity || 0)) : ""),
-                h("td", null, h(OrderItemExcludeAction, { order, item, role: "admin" }))
-            ])))),
-            h("div", { className: "react-actions" }, [
-                h("form", { action: `/admin/order/status/${order.id}`, method: "post", className: "react-inline-form", onSubmit: handleSubmitOnce }, [
-                    Select({ name: "status", defaultValue: order.status || "created" }, (orderStatuses || []).filter(status => status !== "cancelled").map(status => h("option", { key: status, value: status }, statusLabels && statusLabels[status] ? statusLabels[status] : status))),
-                    h("button", { className: "react-btn secondary", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u0443\u0441")
+        return h("section", { className: "react-stack" }, list.map(order => {
+            const buyer = order.user || {};
+            const delivery = order.delivery || {};
+            const customerName = order.customer_name || buyer.full_name || buyer.email || "\u041a\u043b\u0438\u0435\u043d\u0442";
+            const customerPhone = order.customer_phone || buyer.phone || "";
+            const address = order.delivery_address || delivery.address || "";
+            const slot = order.delivery_slot || delivery.delivery_slot || "";
+            const method = order.delivery_method || delivery.method || "";
+            const trackNumber = delivery.track_number || order.delivery_track_number || "";
+            const trackUrl = delivery.tracking_url || order.delivery_tracking_url || (trackNumber ? `/delivery/track/${encodeURIComponent(trackNumber)}` : "");
+            const clientOrders = (clientOrdersByUser && clientOrdersByUser[String(order.user_id)]) || [];
+            return h("div", { key: order.id, id: `order-${order.id}`, className: "react-panel" }, [
+                h("div", { className: "react-page-title" }, [
+                    h("div", null, [
+                        h("h2", null, `\u0417\u0430\u043a\u0430\u0437 ${orderDisplayNumber(order)}`),
+                        h("p", { className: "react-muted" }, `ID: ${order.id}`)
+                    ]),
+                    h("strong", null, h(PriceDisplay, { product: { price: order.total_price }, compact: true, inline: true }))
                 ]),
-                h(AdminOrderCancelForm, { order })
-            ])
-        ])));
+                h("div", { className: "react-chip-row" }, [
+                    h(StatusChip, { value: order.status, label: statusLabels && statusLabels[order.status] ? statusLabels[order.status] : (order.status || "created") }),
+                    h(StatusChip, { value: order.payment_status, label: paymentStatusText(order.payment_status) })
+                ]),
+                h("div", { className: "react-info-grid react-order-meta-grid" }, [
+                    h("div", { className: "react-card" }, [
+                        h("b", null, "\u041a\u043b\u0438\u0435\u043d\u0442"),
+                        h("p", null, customerName),
+                        customerPhone ? h("p", { className: "react-muted" }, customerPhone) : null,
+                        buyer.email ? h("p", { className: "react-muted" }, buyer.email) : null
+                    ]),
+                    h("div", { className: "react-card" }, [
+                        h("b", null, "\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430"),
+                        h("p", null, deliveryMethodText(method) || "\u041d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d\u0430"),
+                        slot ? h("p", { className: "react-muted" }, slot) : null,
+                        address ? h("p", { className: "react-muted" }, address) : null
+                    ]),
+                    h("div", { className: "react-card" }, [
+                        h("b", null, "\u0422\u0440\u0435\u043a\u0438\u043d\u0433"),
+                        h("p", null, deliveryStatusText({ ...order, delivery })),
+                        trackNumber ? h("p", { className: "react-muted" }, trackNumber) : h("p", { className: "react-muted" }, "\u0422\u0440\u0435\u043a-\u043d\u043e\u043c\u0435\u0440 \u0435\u0449\u0435 \u043d\u0435 \u0432\u044b\u0434\u0430\u043d"),
+                        trackUrl ? ButtonLink({ href: trackUrl, className: "secondary" }, "\u041e\u0442\u0441\u043b\u0435\u0434\u0438\u0442\u044c") : null
+                    ])
+                ]),
+                clientOrders.length ? h("div", { className: "react-card" }, [
+                    h("b", null, "\u0412\u0441\u0435 \u0437\u0430\u043a\u0430\u0437\u044b \u043a\u043b\u0438\u0435\u043d\u0442\u0430"),
+                    h("div", { className: "react-stack compact" }, clientOrders.map(clientOrder => h("a", { key: clientOrder.id, href: `#order-${clientOrder.id}`, className: "react-row-link" }, [
+                        h("span", null, orderDisplayNumber(clientOrder)),
+                        h("span", null, money(clientOrder.total_price)),
+                        h("span", { className: "react-muted" }, orderStatusText(clientOrder, statusLabels))
+                    ])))
+                ]) : null,
+                isOrderCancelled(order) && (order.return_reason || order.seller_cancel_reason)
+                    ? h("p", { className: "react-muted" }, order.return_reason || order.seller_cancel_reason)
+                    : null,
+                h("table", { className: "react-table" }, h("tbody", null, (order.items || []).map(item => h("tr", { key: item.id }, [
+                    h("td", null, item.product ? h(ProductMiniPreview, { product: item.product }) : "\u0422\u043e\u0432\u0430\u0440"),
+                    h("td", null, item.quantity),
+                    h("td", null, item.product ? h(PriceDisplay, { product: item.product, compact: true, inline: true }) : ""),
+                    h("td", null, item.product ? money(productFinalPrice(item.product) * Number(item.quantity || 0)) : ""),
+                    h("td", null, h(OrderItemExcludeAction, { order, item, role: "admin" }))
+                ])))),
+                h("div", { className: "react-actions" }, [
+                    h("form", { action: `/admin/order/status/${order.id}`, method: "post", className: "react-inline-form", onSubmit: handleSubmitOnce }, [
+                        Select({ name: "status", defaultValue: order.status || "created" }, (orderStatuses || []).filter(status => status !== "cancelled").map(status => h("option", { key: status, value: status }, statusLabels && statusLabels[status] ? statusLabels[status] : status))),
+                        h("button", { className: "react-btn secondary", type: "submit" }, "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u0443\u0441")
+                    ]),
+                    h(AdminOrderCancelForm, { order })
+                ])
+            ]);
+        }));
     }
     function AdminUsersTable({ users }) {
         const list = users || [];
@@ -3640,7 +3689,7 @@
             h("div", { className: "react-tab-row" }, tabs.map(manageTabButton)),
             tab === "products" && h(AdminProductsTable, { products: props.products || [] }),
             tab === "users" && h(AdminUsersTable, { users: props.users || [] }),
-            tab === "orders" && h(AdminOrdersTable, { orders: props.orders || [], orderStatuses: props.order_statuses || [], statusLabels: props.status_labels || {} }),
+            tab === "orders" && h(AdminOrdersTable, { orders: props.orders || [], orderStatuses: props.order_statuses || [], statusLabels: props.status_labels || {}, clientOrdersByUser: props.client_orders_by_user || {} }),
             tab === "finance" && h(AdminFinancePanel, { embedded: true })
         ]);
     }
@@ -4428,11 +4477,24 @@
         const delivery = props.delivery || {};
         const order = props.order || {};
         const steps = [
+            { id: "waiting_payment", label: "Оплата" },
+            { id: "waiting_assembly", label: "Сборка заказа" },
             { id: "accepted", label: "Принята логистикой" },
             { id: "in_transit", label: "В пути" },
             { id: "delivered", label: "Доставлена" }
         ];
-        const stepOrder = { created: 0, accepted: 1, in_transit: 2, delivered: 3, manual: 1 };
+        const stepOrder = {
+            created: 0,
+            waiting_payment: 1,
+            waiting_assembly: 2,
+            ready_for_delivery: 3,
+            transferred_to_delivery: 3,
+            accepted: 3,
+            in_transit: 4,
+            delivered: 5,
+            cancelled: 0,
+            manual: 3
+        };
         const status = delivery.status || "created";
         const statusRank = stepOrder[status] || 0;
 

@@ -174,11 +174,36 @@ def admin_manage_page(request: Request, db: Session = Depends(get_db)):
     users = db.query(User).all()
     orders = (
         db.query(Order)
-        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .options(
+            joinedload(Order.user),
+            joinedload(Order.delivery),
+            joinedload(Order.items).joinedload(OrderItem.product),
+        )
         .order_by(Order.id.desc())
         .limit(50)
         .all()
     )
+    order_user_ids = {order.user_id for order in orders if order.user_id}
+    client_orders_by_user: dict[str, list[dict[str, object]]] = {}
+    if order_user_ids:
+        client_orders = (
+            db.query(Order)
+            .filter(Order.user_id.in_(order_user_ids))
+            .order_by(Order.created_at.desc(), Order.id.desc())
+            .all()
+        )
+        for client_order in client_orders:
+            key = str(client_order.user_id)
+            client_orders_by_user.setdefault(key, []).append({
+                "id": client_order.id,
+                "order_number": client_order.order_number,
+                "total_price": client_order.total_price,
+                "status": client_order.status,
+                "payment_status": client_order.payment_status,
+                "delivery_method": client_order.delivery_method,
+                "delivery_slot": client_order.delivery_slot,
+                "created_at": client_order.created_at,
+            })
     tab = (request.query_params.get("tab") or "products").strip()
     if tab not in {"products", "users", "orders", "finance"}:
         tab = "products"
@@ -187,6 +212,7 @@ def admin_manage_page(request: Request, db: Session = Depends(get_db)):
         "products": products,
         "users": users,
         "orders": orders,
+        "client_orders_by_user": client_orders_by_user,
         "order_statuses": ORDER_STATUSES,
         "status_labels": ORDER_STATUS_LABELS,
         "status_badges": ORDER_STATUS_BADGES,

@@ -1,7 +1,7 @@
 # Project Memory
 
 ## Project
-Farm marketplace "Свои Ряды" on FastAPI + SQLite + React UI in `static/react-app.js`.
+Farm marketplace "Свои Ряды" on FastAPI + MySQL + React UI in `static/react-app.js`.
 
 ## Main Goal
 Finish a working diploma-grade marketplace flow with focus on functionality first, not polished design.
@@ -29,9 +29,10 @@ Finish a working diploma-grade marketplace flow with focus on functionality firs
 
 ## Important Technical Decisions
 - Default DB handling was hardened in `database.py`.
-- If `farmmarket.db` is broken, app falls back to `runtime_test_ok.db`.
+- Runtime app startup requires `DATABASE_URL`; use MySQL for local/demo/production runs.
+- SQLite is kept only for isolated pytest fixtures that set `DATABASE_URL` explicitly.
 - Local server is normally run with:
-  - `DATABASE_URL=sqlite:///./runtime_test_ok.db`
+  - `DATABASE_URL=mysql+pymysql://DB_USER:DB_PASSWORD@127.0.0.1:3306/farmmarket?charset=utf8mb4`
   - `uvicorn main:app --host 127.0.0.1 --port 8000`
 
 ## Implemented Features
@@ -107,7 +108,7 @@ Finish a working diploma-grade marketplace flow with focus on functionality firs
 - Seller cabinet route and seller orders route open successfully.
 - Admin manage route and admin moderation route open successfully.
 - Search page works with typo correction and returns corrected suggestions.
-- Buyer checkout flow was re-verified against `runtime_test_ok.db`.
+- Buyer checkout flow was re-verified in automated isolated test DB fixtures.
 - Seller order status flow was re-verified: `confirm -> assemble -> ship -> deliver`.
 - Buyer receives notifications for seller status changes.
 
@@ -118,7 +119,7 @@ Finish a working diploma-grade marketplace flow with focus on functionality firs
 ## Known Risks / Watchouts
 - `static/react-app.js` had encoding issues before. New Russian labels should be added carefully.
 - Some new UI labels are safer when inserted with unicode escapes if encoding looks unstable.
-- `farmmarket.db` is unreliable; prefer `runtime_test_ok.db`.
+- Do not rely on bundled SQLite files for the demo; use MySQL through `DATABASE_URL`.
 
 ## Likely Next Useful Work
 - Continue bug-fixing and defense polish.

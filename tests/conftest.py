@@ -20,6 +20,9 @@ def app():
     os.environ["APP_ENV"] = "development"
     os.environ["APP_SEED_DEMO_DATA"] = "1"
     os.environ["SESSION_SECRET_KEY"] = "test-session-secret"
+    os.environ["ENABLE_DEMO_PAYMENTS"] = "0"
+    os.environ["ENABLE_PASSWORD_RESET_DEMO_LINKS"] = "0"
+    os.environ["ENABLE_SELLER_WALLET_DEPOSITS"] = "0"
     # Re-import in fresh sys.modules state.
     for mod in list(sys.modules):
         if mod in ("main", "database", "config", "models") or mod.startswith("routes."):

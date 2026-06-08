@@ -7,18 +7,29 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from base64 import b64decode
 from itsdangerous import BadSignature, TimestampSigner
 import json
 from database import engine, Base, get_db, SessionLocal
-from models import User, Product, Review, SellerReview, Coupon, OrderItem, FarmCertificate, PlatformSetting
+from models import (
+    User,
+    Product,
+    ProductCategory,
+    Review,
+    SellerReview,
+    Coupon,
+    OrderItem,
+    FarmCertificate,
+    PlatformSetting,
+)
 from auth import hash_password, get_optional_user
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import quote_plus
-from config import AUTO_SEED_DEMO_DATA, SESSION_SECRET_KEY as CONFIGURED_SESSION_SECRET_KEY
+from config import AUTO_SEED_DEMO_DATA, IS_PRODUCTION, SESSION_SECRET_KEY as CONFIGURED_SESSION_SECRET_KEY
 from marketplace_utils import (
     effective_product_price_expr,
     product_not_on_sale_clause,
@@ -39,6 +50,7 @@ Base.metadata.create_all(bind=engine)
 def _migrate_schema():
     inspector = inspect(engine)
     table_names = inspector.get_table_names()
+    is_mysql = engine.dialect.name == "mysql"
 
     # Миграция products
     if "products" in table_names:
@@ -60,13 +72,15 @@ def _migrate_schema():
             if "rejection_reason" not in cols:
                 conn.execute(text("ALTER TABLE products ADD COLUMN rejection_reason VARCHAR(500)"))
             if "description" not in cols:
-                conn.execute(text("ALTER TABLE products ADD COLUMN description VARCHAR(4000)"))
+                conn.execute(text("ALTER TABLE products ADD COLUMN description TEXT"))
             if "expiration_days" not in cols:
                 conn.execute(text("ALTER TABLE products ADD COLUMN expiration_days INTEGER"))
             if "has_certificate" not in cols:
                 conn.execute(text("ALTER TABLE products ADD COLUMN has_certificate INTEGER DEFAULT 0"))
             if "region" not in cols:
                 conn.execute(text("ALTER TABLE products ADD COLUMN region VARCHAR(200)"))
+            if is_mysql and "description" in cols:
+                conn.execute(text("ALTER TABLE products MODIFY COLUMN description TEXT"))
             conn.execute(text("UPDATE products SET stock = 0 WHERE stock IS NULL"))
             conn.execute(text("UPDATE products SET unit = '\u0448\u0442' WHERE unit IS NULL OR unit = ''"))
             conn.execute(
@@ -99,14 +113,22 @@ def _migrate_schema():
 
     if "product_images" not in table_names:
         with engine.begin() as conn:
+            product_images_ddl = (
+                "CREATE TABLE product_images ("
+                "id INT AUTO_INCREMENT PRIMARY KEY, "
+                "product_id INTEGER NOT NULL, "
+                "image_url VARCHAR(500) NOT NULL, "
+                "sort_order INTEGER DEFAULT 0, "
+                "FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE)"
+            ) if is_mysql else (
+                "CREATE TABLE product_images ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE, "
+                "image_url VARCHAR(500) NOT NULL, "
+                "sort_order INTEGER DEFAULT 0)"
+            )
             conn.execute(
-                text(
-                    "CREATE TABLE product_images ("
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                    "product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE, "
-                    "image_url VARCHAR(500) NOT NULL, "
-                    "sort_order INTEGER DEFAULT 0)"
-                )
+                text(product_images_ddl)
             )
             conn.execute(
                 text(
@@ -133,32 +155,40 @@ def _migrate_schema():
                 ("phone",            "ALTER TABLE users ADD COLUMN phone VARCHAR(50)"),
                 ("inn",              "ALTER TABLE users ADD COLUMN inn VARCHAR(20)"),
                 ("farm_address",     "ALTER TABLE users ADD COLUMN farm_address VARCHAR(500)"),
-                ("farm_description", "ALTER TABLE users ADD COLUMN farm_description VARCHAR(2000)"),
-                ("product_categories", "ALTER TABLE users ADD COLUMN product_categories VARCHAR(1000)"),
+                ("farm_description", "ALTER TABLE users ADD COLUMN farm_description TEXT"),
+                ("product_categories", "ALTER TABLE users ADD COLUMN product_categories TEXT"),
                 ("farm_photo_url",   "ALTER TABLE users ADD COLUMN farm_photo_url VARCHAR(500)"),
-                ("passport_photo_url", "ALTER TABLE users ADD COLUMN passport_photo_url VARCHAR(500)"),
-                ("supplier_registration_data", "ALTER TABLE users ADD COLUMN supplier_registration_data VARCHAR(1000)"),
-                ("supplier_document_url", "ALTER TABLE users ADD COLUMN supplier_document_url VARCHAR(500)"),
-                ("supplier_bank_details", "ALTER TABLE users ADD COLUMN supplier_bank_details VARCHAR(1000)"),
                 ("seller_application_status", "ALTER TABLE users ADD COLUMN seller_application_status VARCHAR(50) DEFAULT 'approved'"),
                 ("seller_application_number", "ALTER TABLE users ADD COLUMN seller_application_number VARCHAR(40)"),
-                ("seller_application_rejection_reason", "ALTER TABLE users ADD COLUMN seller_application_rejection_reason VARCHAR(2000)"),
-                ("seller_application_admin_comment", "ALTER TABLE users ADD COLUMN seller_application_admin_comment VARCHAR(2000)"),
+                ("seller_application_rejection_reason", "ALTER TABLE users ADD COLUMN seller_application_rejection_reason TEXT"),
+                ("seller_application_admin_comment", "ALTER TABLE users ADD COLUMN seller_application_admin_comment TEXT"),
                 ("pickup_enabled", "ALTER TABLE users ADD COLUMN pickup_enabled INTEGER DEFAULT 1"),
                 ("pickup_address", "ALTER TABLE users ADD COLUMN pickup_address VARCHAR(500)"),
-                ("pickup_comment", "ALTER TABLE users ADD COLUMN pickup_comment VARCHAR(1000)"),
+                ("pickup_comment", "ALTER TABLE users ADD COLUMN pickup_comment TEXT"),
                 ("farmer_delivery_enabled", "ALTER TABLE users ADD COLUMN farmer_delivery_enabled INTEGER DEFAULT 1"),
                 ("farmer_delivery_fee", "ALTER TABLE users ADD COLUMN farmer_delivery_fee NUMERIC(10, 2) DEFAULT 500"),
                 ("farmer_delivery_min_order", "ALTER TABLE users ADD COLUMN farmer_delivery_min_order NUMERIC(10, 2) DEFAULT 0"),
-                ("farmer_delivery_comment", "ALTER TABLE users ADD COLUMN farmer_delivery_comment VARCHAR(1000)"),
+                ("farmer_delivery_comment", "ALTER TABLE users ADD COLUMN farmer_delivery_comment TEXT"),
                 ("delivery_slots", "ALTER TABLE users ADD COLUMN delivery_slots VARCHAR(1000)"),
                 ("partner_delivery_enabled", "ALTER TABLE users ADD COLUMN partner_delivery_enabled INTEGER DEFAULT 0"),
                 ("partner_delivery_fee", "ALTER TABLE users ADD COLUMN partner_delivery_fee NUMERIC(10, 2) DEFAULT 700"),
-                ("partner_delivery_comment", "ALTER TABLE users ADD COLUMN partner_delivery_comment VARCHAR(1000)"),
+                ("partner_delivery_comment", "ALTER TABLE users ADD COLUMN partner_delivery_comment TEXT"),
             ]:
                 if col not in cols:
                     conn.execute(text(ddl))
                     cols.add(col)
+            if is_mysql:
+                for col in [
+                    "farm_description",
+                    "product_categories",
+                    "seller_application_rejection_reason",
+                    "seller_application_admin_comment",
+                    "pickup_comment",
+                    "farmer_delivery_comment",
+                    "partner_delivery_comment",
+                ]:
+                    if col in cols:
+                        conn.execute(text(f"ALTER TABLE users MODIFY COLUMN {col} TEXT"))
             # Тестовые пользователи считаются подтверждёнными
             # Demo accounts are treated as verified; do not verify real registered users on every startup.
             conn.execute(text(
@@ -187,11 +217,18 @@ def _migrate_schema():
                 "WHERE role = 'seller' AND is_approved = 1 "
                 "AND seller_application_status = 'pending'"
             ))
-            conn.execute(text(
-                "UPDATE users SET seller_application_number = 'ZF-' || strftime('%Y%m%d', 'now') || '-' || printf('%05d', id) "
-                "WHERE role = 'seller' "
-                "AND (seller_application_number IS NULL OR seller_application_number = '')"
-            ))
+            if is_mysql:
+                conn.execute(text(
+                    "UPDATE users SET seller_application_number = CONCAT('ZF-', DATE_FORMAT(NOW(), '%Y%m%d'), '-', LPAD(id, 5, '0')) "
+                    "WHERE role = 'seller' "
+                    "AND (seller_application_number IS NULL OR seller_application_number = '')"
+                ))
+            else:
+                conn.execute(text(
+                    "UPDATE users SET seller_application_number = 'ZF-' || strftime('%Y%m%d', 'now') || '-' || printf('%05d', id) "
+                    "WHERE role = 'seller' "
+                    "AND (seller_application_number IS NULL OR seller_application_number = '')"
+                ))
             conn.execute(text("UPDATE users SET pickup_enabled = 1 WHERE role = 'seller' AND pickup_enabled IS NULL"))
             conn.execute(text("UPDATE users SET farmer_delivery_enabled = 1 WHERE role = 'seller' AND farmer_delivery_enabled IS NULL"))
             conn.execute(text("UPDATE users SET partner_delivery_enabled = 0 WHERE role = 'seller' AND partner_delivery_enabled IS NULL"))
@@ -246,9 +283,14 @@ def _migrate_schema():
         cols = {c["name"] for c in inspector.get_columns("reviews")}
         with engine.begin() as conn:
             if "seller_response" not in cols:
-                conn.execute(text("ALTER TABLE reviews ADD COLUMN seller_response VARCHAR(2000)"))
+                conn.execute(text("ALTER TABLE reviews ADD COLUMN seller_response TEXT"))
             if "seller_response_at" not in cols:
                 conn.execute(text("ALTER TABLE reviews ADD COLUMN seller_response_at DATETIME"))
+            if is_mysql:
+                if "text" in cols:
+                    conn.execute(text("ALTER TABLE reviews MODIFY COLUMN text TEXT"))
+                if "seller_response" in cols:
+                    conn.execute(text("ALTER TABLE reviews MODIFY COLUMN seller_response TEXT"))
 
     if "farm_certificates" in table_names:
         cols = {c["name"] for c in inspector.get_columns("farm_certificates")}
@@ -267,12 +309,15 @@ def _migrate_schema():
                 ("tracking_url", "ALTER TABLE deliveries ADD COLUMN tracking_url VARCHAR(500)"),
                 ("status", "ALTER TABLE deliveries ADD COLUMN status VARCHAR(50) DEFAULT 'created'"),
                 ("delivery_slot", "ALTER TABLE deliveries ADD COLUMN delivery_slot VARCHAR(100)"),
-                ("comment", "ALTER TABLE deliveries ADD COLUMN comment VARCHAR(2000)"),
+                ("comment", "ALTER TABLE deliveries ADD COLUMN comment TEXT"),
                 ("delivery_fee", "ALTER TABLE deliveries ADD COLUMN delivery_fee NUMERIC(10,2) DEFAULT 0"),
+                ("delivery_date", "ALTER TABLE deliveries ADD COLUMN delivery_date DATETIME"),
             ]:
                 if col not in cols:
                     conn.execute(text(ddl))
                     cols.add(col)
+            if is_mysql and "comment" in cols:
+                conn.execute(text("ALTER TABLE deliveries MODIFY COLUMN comment TEXT"))
             conn.execute(text("UPDATE deliveries SET delivery_fee = 0 WHERE delivery_fee IS NULL"))
 
     # Order checkout fields
@@ -286,24 +331,40 @@ def _migrate_schema():
                 ("delivery_address", "ALTER TABLE orders ADD COLUMN delivery_address VARCHAR(500)"),
                 ("delivery_method", "ALTER TABLE orders ADD COLUMN delivery_method VARCHAR(50)"),
                 ("delivery_slot", "ALTER TABLE orders ADD COLUMN delivery_slot VARCHAR(100)"),
-                ("customer_comment", "ALTER TABLE orders ADD COLUMN customer_comment VARCHAR(2000)"),
+                ("customer_comment", "ALTER TABLE orders ADD COLUMN customer_comment TEXT"),
                 ("selected_payment_method", "ALTER TABLE orders ADD COLUMN selected_payment_method VARCHAR(50)"),
                 ("payment_id", "ALTER TABLE orders ADD COLUMN payment_id VARCHAR(255)"),
                 ("paid_at", "ALTER TABLE orders ADD COLUMN paid_at DATETIME"),
                 ("payment_amount", "ALTER TABLE orders ADD COLUMN payment_amount NUMERIC(10,2)"),
-                ("seller_cancel_reason", "ALTER TABLE orders ADD COLUMN seller_cancel_reason VARCHAR(2000)"),
+                ("seller_cancel_reason", "ALTER TABLE orders ADD COLUMN seller_cancel_reason TEXT"),
                 ("delivery_fee", "ALTER TABLE orders ADD COLUMN delivery_fee NUMERIC(10,2) DEFAULT 0"),
+                ("platform_fee", "ALTER TABLE orders ADD COLUMN platform_fee NUMERIC(10,2) DEFAULT 0"),
                 ("payout_status", "ALTER TABLE orders ADD COLUMN payout_status VARCHAR(50) DEFAULT 'pending'"),
                 ("payout_confirmed_at", "ALTER TABLE orders ADD COLUMN payout_confirmed_at DATETIME"),
+                ("coupon_id", "ALTER TABLE orders ADD COLUMN coupon_id INTEGER"),
+                ("discount_amount", "ALTER TABLE orders ADD COLUMN discount_amount NUMERIC(10,2) DEFAULT 0"),
+                ("escrow_status", "ALTER TABLE orders ADD COLUMN escrow_status VARCHAR(50) DEFAULT 'pending'"),
                 ("delivered_at", "ALTER TABLE orders ADD COLUMN delivered_at DATETIME"),
                 ("buyer_confirmed_at", "ALTER TABLE orders ADD COLUMN buyer_confirmed_at DATETIME"),
                 ("auto_release_at", "ALTER TABLE orders ADD COLUMN auto_release_at DATETIME"),
                 ("escrow_released_at", "ALTER TABLE orders ADD COLUMN escrow_released_at DATETIME"),
+                ("return_status", "ALTER TABLE orders ADD COLUMN return_status VARCHAR(50)"),
+                ("return_reason", "ALTER TABLE orders ADD COLUMN return_reason TEXT"),
             ]:
                 if col not in cols:
                     conn.execute(text(ddl))
-            conn.execute(text("UPDATE orders SET order_number = 'FM-' || strftime('%Y%m%d', COALESCE(created_at, 'now')) || '-' || printf('%05d', id) WHERE order_number IS NULL OR order_number = ''"))
+                    cols.add(col)
+            if is_mysql:
+                for col in ["customer_comment", "seller_cancel_reason", "return_reason"]:
+                    if col in cols:
+                        conn.execute(text(f"ALTER TABLE orders MODIFY COLUMN {col} TEXT"))
+            if is_mysql:
+                conn.execute(text("UPDATE orders SET order_number = CONCAT('FM-', DATE_FORMAT(COALESCE(created_at, NOW()), '%Y%m%d'), '-', LPAD(id, 5, '0')) WHERE order_number IS NULL OR order_number = ''"))
+            else:
+                conn.execute(text("UPDATE orders SET order_number = 'FM-' || strftime('%Y%m%d', COALESCE(created_at, 'now')) || '-' || printf('%05d', id) WHERE order_number IS NULL OR order_number = ''"))
             conn.execute(text("UPDATE orders SET payout_status = 'pending' WHERE payout_status IS NULL OR payout_status = ''"))
+            conn.execute(text("UPDATE orders SET discount_amount = 0 WHERE discount_amount IS NULL"))
+            conn.execute(text("UPDATE orders SET escrow_status = 'pending' WHERE escrow_status IS NULL OR escrow_status = ''"))
             conn.execute(text("UPDATE orders SET status = 'awaiting_payment' WHERE status = 'created' AND COALESCE(payment_status, 'pending') = 'pending'"))
 
     if "complaints" in table_names:
@@ -318,9 +379,15 @@ def _migrate_schema():
             if "attachment_path" not in cols:
                 conn.execute(text("ALTER TABLE complaints ADD COLUMN attachment_path VARCHAR(500)"))
             if "admin_response" not in cols:
-                conn.execute(text("ALTER TABLE complaints ADD COLUMN admin_response VARCHAR(2000)"))
+                conn.execute(text("ALTER TABLE complaints ADD COLUMN admin_response TEXT"))
+                cols.add("admin_response")
             if "updated_at" not in cols:
                 conn.execute(text("ALTER TABLE complaints ADD COLUMN updated_at DATETIME"))
+                cols.add("updated_at")
+            if is_mysql:
+                for col in ["text", "admin_response"]:
+                    if col in cols:
+                        conn.execute(text(f"ALTER TABLE complaints MODIFY COLUMN {col} TEXT"))
             # Унифицируем статусы жалоб: new / in_progress / resolved / rejected
             # (sent_to_accountant остаётся системным для передачи бухгалтеру)
             conn.execute(text(
@@ -353,6 +420,63 @@ def _migrate_schema():
 
 _migrate_schema()
 
+
+def _drop_obsolete_schema_objects() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    obsolete_tables = {
+        "seller_profiles",
+        "seller_delivery_methods",
+        "seller_delivery_slots",
+    }
+    obsolete_user_columns = {
+        "passport_photo_url",
+        "supplier_registration_data",
+        "supplier_document_url",
+        "supplier_bank_details",
+    }
+
+    try:
+        with engine.begin() as conn:
+            for table_name in sorted(obsolete_tables & table_names):
+                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+
+            if "users" in table_names:
+                user_columns = {column["name"] for column in inspector.get_columns("users")}
+                for column_name in sorted(obsolete_user_columns & user_columns):
+                    conn.execute(text(f"ALTER TABLE users DROP COLUMN {column_name}"))
+    except SQLAlchemyError:
+        # Cleanup is best-effort: an older SQLite/MySQL variant should not block app startup.
+        pass
+
+
+_drop_obsolete_schema_objects()
+
+
+def _sync_3nf_reference_tables() -> None:
+    db = SessionLocal()
+    try:
+        category_names = [
+            row[0]
+            for row in db.query(Product.category).filter(
+                Product.category.isnot(None),
+                Product.category != "",
+            ).distinct().all()
+        ]
+        existing_categories = {
+            row.name for row in db.query(ProductCategory).filter(ProductCategory.name.in_(category_names)).all()
+        } if category_names else set()
+        for name in category_names:
+            if name not in existing_categories:
+                db.add(ProductCategory(name=name, slug=name.strip().lower().replace(" ", "-")))
+
+        db.commit()
+    finally:
+        db.close()
+
+
+_sync_3nf_reference_tables()
+
 # Создаем приложение FastAPI
 app = FastAPI(
     title="Свои Ряды — маркетплейс",
@@ -367,7 +491,12 @@ app = FastAPI(
 # Подключаем сессии (для cookie-based auth)
 SESSION_SECRET_KEY = CONFIGURED_SESSION_SECRET_KEY or "change-me-in-production-please"
 SESSION_COOKIE_NAME = "session"
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET_KEY,
+    https_only=IS_PRODUCTION,
+    same_site="lax",
+)
 
 
 def _read_session_user_id(request: Request):
@@ -449,6 +578,7 @@ async def role_gate(request: Request, call_next):
         ],
         "seller": [
             "/seller/",
+            "/api/",
             "/order/",
             "/payment/wallet",
             "/payment/transactions",
@@ -464,6 +594,7 @@ async def role_gate(request: Request, call_next):
         ],
         "admin": [
             "/admin/",
+            "/api/",
             "/admin/backups",
             "/admin/finance",
             "/delivery/track/",
@@ -480,6 +611,7 @@ async def role_gate(request: Request, call_next):
         ],
         "manager": [
             "/admin/moderation",
+            "/api/",
             "/product/",
             "/seller/",
             "/reviews/admin",
@@ -564,10 +696,6 @@ def _json_safe(value, depth=0, cache=None):
             "password_reset_expires_at",
             "email_verified",
             "inn",
-            "passport_photo_url",
-            "supplier_document_url",
-            "supplier_registration_data",
-            "supplier_bank_details",
         }
         for column in value.__table__.columns:
             if column.name in skip_columns:
@@ -644,6 +772,16 @@ app.include_router(accounting.router)
 app.include_router(conversations.router)
 app.include_router(api_catalog.router)
 app.include_router(finance_admin.router)
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        return {"ok": False}
+    return {"ok": True}
 
 
 def init_test_data():
@@ -846,6 +984,7 @@ def init_test_data():
 # Заполняем тестовые данные
 if AUTO_SEED_DEMO_DATA:
     init_test_data()
+    _sync_3nf_reference_tables()
 
 
 HOME_SECTION_LIMIT = 12

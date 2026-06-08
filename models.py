@@ -1,7 +1,7 @@
 # models.py
 # Модели SQLAlchemy для фермерского маркетплейса
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Numeric, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Numeric, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database import Base
@@ -30,30 +30,26 @@ class User(Base):
     phone = Column(String(50), nullable=True)
     inn = Column(String(20), nullable=True)
     farm_address = Column(String(500), nullable=True)
-    farm_description = Column(String(2000), nullable=True)
-    product_categories = Column(String(1000), nullable=True)
+    farm_description = Column(Text, nullable=True)
+    product_categories = Column(Text, nullable=True)
     farm_photo_url = Column(String(500), nullable=True)
-    passport_photo_url = Column(String(500), nullable=True)
-    supplier_registration_data = Column(String(1000), nullable=True)
-    supplier_document_url = Column(String(500), nullable=True)
-    supplier_bank_details = Column(String(1000), nullable=True)
     seller_application_status = Column(String(50), default="approved")
     seller_application_number = Column(String(40), unique=True, index=True, nullable=True)
-    seller_application_rejection_reason = Column(String(2000), nullable=True)
-    seller_application_admin_comment = Column(String(2000), nullable=True)
+    seller_application_rejection_reason = Column(Text, nullable=True)
+    seller_application_admin_comment = Column(Text, nullable=True)
 
     # Delivery settings for seller checkout
     pickup_enabled = Column(Integer, default=1)
     pickup_address = Column(String(500), nullable=True)
-    pickup_comment = Column(String(1000), nullable=True)
+    pickup_comment = Column(Text, nullable=True)
     farmer_delivery_enabled = Column(Integer, default=1)
     farmer_delivery_fee = Column(Numeric(10, 2), default=500)
     farmer_delivery_min_order = Column(Numeric(10, 2), default=0)
-    farmer_delivery_comment = Column(String(1000), nullable=True)
+    farmer_delivery_comment = Column(Text, nullable=True)
     delivery_slots = Column(String(1000), nullable=True)
     partner_delivery_enabled = Column(Integer, default=0)
     partner_delivery_fee = Column(Numeric(10, 2), default=700)
-    partner_delivery_comment = Column(String(1000), nullable=True)
+    partner_delivery_comment = Column(Text, nullable=True)
 
     # Связи
     cart_items = relationship("CartItem", back_populates="user", cascade="all, delete")
@@ -72,6 +68,17 @@ class User(Base):
     messages_sent = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender", cascade="all, delete")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete")
     promo_codes = relationship("Coupon", foreign_keys="Coupon.seller_id", back_populates="seller", cascade="all, delete")
+
+
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    slug = Column(String(100), unique=True, nullable=True)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Integer, default=1)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 class Product(Base):
@@ -94,7 +101,7 @@ class Product(Base):
     unit = Column(String(50), default="\u0448\u0442")
     low_stock_threshold = Column(Integer, default=0)
     image_url = Column(String(500), nullable=True)  # URL фото товара (загруженное или внешнее)
-    description = Column(String(4000), nullable=True)  # подробное описание товара
+    description = Column(Text, nullable=True)  # подробное описание товара
     status = Column(String(50), default="pending")  # pending, approved, rejected
     rejection_reason = Column(String(500), nullable=True)  # причина отклонения
 
@@ -176,9 +183,9 @@ class Order(Base):
     delivery_address = Column(String(500), nullable=True)
     delivery_method = Column(String(50), nullable=True)
     delivery_slot = Column(String(100), nullable=True)
-    customer_comment = Column(String(2000), nullable=True)
+    customer_comment = Column(Text, nullable=True)
     selected_payment_method = Column(String(50), nullable=True)
-    seller_cancel_reason = Column(String(2000), nullable=True)
+    seller_cancel_reason = Column(Text, nullable=True)
     delivery_fee = Column(Numeric(10, 2), default=0)
     platform_fee = Column(Numeric(10, 2), default=0)  # комиссия площадки
     payout_status = Column(String(50), default="pending")
@@ -191,7 +198,7 @@ class Order(Base):
     auto_release_at = Column(DateTime, nullable=True)
     escrow_released_at = Column(DateTime, nullable=True)
     return_status = Column(String(50), nullable=True)  # requested, approved, rejected
-    return_reason = Column(String(2000), nullable=True)
+    return_reason = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -225,7 +232,7 @@ class Delivery(Base):
     provider = Column(String(100), nullable=True)
     provider_name = Column(String(100), nullable=True)
     delivery_slot = Column(String(100), nullable=True)
-    comment = Column(String(2000), nullable=True)
+    comment = Column(Text, nullable=True)
     delivery_fee = Column(Numeric(10, 2), default=0)
     external_id = Column(String(100), nullable=True)
     track_number = Column(String(100), nullable=True)
@@ -246,8 +253,8 @@ class Review(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"))
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)  # для проверки факта покупки
     rating = Column(Integer, default=5)   # 1–5
-    text = Column(String(2000))
-    seller_response = Column(String(2000), nullable=True)
+    text = Column(Text)
+    seller_response = Column(Text, nullable=True)
     seller_response_at = Column(DateTime, nullable=True)
     status = Column(String(50), default="pending")  # pending, approved, rejected
     created_at = Column(DateTime, server_default=func.now())
@@ -266,7 +273,7 @@ class SellerReview(Base):
     seller_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
     rating = Column(Integer, default=5)
-    text = Column(String(2000))
+    text = Column(Text)
     status = Column(String(50), default="approved")
     created_at = Column(DateTime, server_default=func.now())
 
@@ -301,7 +308,7 @@ class Notification(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)  # null = system-wide
     type = Column(String(50), default="email")  # email, push, sms
     subject = Column(String(500), nullable=False)
-    body = Column(String(4000), nullable=False)
+    body = Column(Text, nullable=False)
     is_read = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -318,11 +325,11 @@ class Complaint(Base):
     target_product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True)  # или на товар
     type = Column(String(100), default="product")  # product, seller, delivery
     category = Column(String(100), default="other")
-    text = Column(String(2000), nullable=False)
+    text = Column(Text, nullable=False)
     attachment_path = Column(String(500), nullable=True)
     status = Column(String(50), default="new")  # new, processing, resolved, rejected
     assigned_to_role = Column(String(50), default="admin")
-    admin_response = Column(String(2000), nullable=True)
+    admin_response = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -366,7 +373,7 @@ class Message(Base):
     conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     sender_role = Column(String(50), nullable=False)
-    text = Column(String(2000), nullable=False)
+    text = Column(Text, nullable=False)
     attachment_path = Column(String(500), nullable=True)
     is_read = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
@@ -490,7 +497,7 @@ class PaymentDispute(Base):
     buyer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     amount = Column(Numeric(10, 2), default=0)
     status = Column(String(30), default="open")  # open, resolved_buyer, resolved_seller, closed
-    resolution_note = Column(String(2000), nullable=True)
+    resolution_note = Column(Text, nullable=True)
     admin_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     resolved_at = Column(DateTime, nullable=True)

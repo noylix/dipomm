@@ -13,7 +13,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 from decimal import Decimal
-from config import APP_BASE_URL
+from config import APP_BASE_URL, ENABLE_DEMO_PAYMENTS, ENABLE_SELLER_WALLET_DEPOSITS, IS_PRODUCTION
 
 from database import get_db
 from models import User, Wallet, Transaction, PaymentMethod, Order, OrderItem
@@ -27,6 +27,7 @@ templates = Jinja2Templates(directory="templates")
 
 MAX_PAYMENT_AMOUNT = Decimal("1000000")
 ALLOWED_PAYMENT_METHODS = {"card_on_delivery", "cash", "wallet", "yookassa"}
+ALLOWED_ORDER_PAYMENT_METHODS = {"yookassa"}
 WALLET_DISABLED_ROLES = frozenset({"user", "admin"})
 YOOKASSA_API_URL = "https://api.yookassa.ru/v3/payments"
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
@@ -68,6 +69,33 @@ def _resolve_return_url(request: Request) -> str:
     return str(request.url_for("yookassa_return"))
 
 
+def _demo_payments_enabled() -> bool:
+    return bool(ENABLE_DEMO_PAYMENTS and not IS_PRODUCTION)
+
+
+def _yookassa_auth_header() -> str | None:
+    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+        return None
+    auth = base64.b64encode(f"{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}".encode("utf-8")).decode("utf-8")
+    return f"Basic {auth}"
+
+
+def _fetch_yookassa_payment(payment_id: str) -> tuple[dict | None, str]:
+    auth_header = _yookassa_auth_header()
+    if not auth_header:
+        return None, "YooKassa credentials are not configured."
+    req = urllib_request.Request(
+        f"{YOOKASSA_API_URL}/{payment_id}",
+        headers={"Authorization": auth_header},
+        method="GET",
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8")), ""
+    except Exception as exc:
+        return None, f"Could not verify YooKassa payment: {exc}"
+
+
 def _create_yookassa_payment(
     order: Order,
     user: User,
@@ -93,12 +121,14 @@ def _create_yookassa_payment(
             "user_id": str(user.id),
         },
     }
-    auth = base64.b64encode(f"{YOOKASSA_SHOP_ID}:{YOOKASSA_SECRET_KEY}".encode("utf-8")).decode("utf-8")
+    auth_header = _yookassa_auth_header()
+    if not auth_header:
+        return None, "Не настроен YOOKASSA_SECRET_KEY.", None
     req = urllib_request.Request(
         YOOKASSA_API_URL,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Basic {auth}",
+            "Authorization": auth_header,
             "Content-Type": "application/json",
             "Idempotence-Key": str(uuid.uuid4()),
         },
@@ -180,6 +210,10 @@ def deposit_wallet(
     guard = check_role(user, ["seller"])
     if guard:
         return guard
+
+    if not ENABLE_SELLER_WALLET_DEPOSITS:
+        request.session["wallet_error"] = "Пополнение баланса продавцом отключено до подключения проверенного платежного провайдера."
+        return RedirectResponse(url=_seller_finance_url(), status_code=303)
 
     if amount <= 0 or amount > MAX_PAYMENT_AMOUNT or payment_method not in ALLOWED_PAYMENT_METHODS:
         request.session["wallet_error"] = "Сумма должна быть положительной"
@@ -295,6 +329,10 @@ def payment_page(order_id: int, request: Request, db: Session = Depends(get_db))
 
 @router.get("/{order_id}/demo")
 def yookassa_demo_page(order_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _demo_payments_enabled():
+        request.session["payment_error"] = "Демо-оплата отключена. Подключите YooKassa или включите ENABLE_DEMO_PAYMENTS=1 только для локальной разработки."
+        return RedirectResponse(url="/order/orders", status_code=303)
+
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -319,6 +357,10 @@ def yookassa_demo_page(order_id: int, request: Request, db: Session = Depends(ge
 
 @router.post("/{order_id}/demo/complete")
 def yookassa_demo_complete(order_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _demo_payments_enabled():
+        request.session["payment_error"] = "Демо-оплата отключена."
+        return RedirectResponse(url="/order/orders", status_code=303)
+
     user = get_optional_user(request, db)
     guard = check_role(user, ["user"])
     if guard:
@@ -385,7 +427,7 @@ def process_payment(
             request.session["payment_error"] = "Этот заказ уже нельзя оплатить."
         return RedirectResponse(url="/order/orders", status_code=303)
 
-    if payment_method not in ALLOWED_PAYMENT_METHODS:
+    if payment_method not in ALLOWED_ORDER_PAYMENT_METHODS:
         request.session["payment_error"] = "Недопустимый способ оплаты"
         return RedirectResponse(url=f"/payment/{order_id}", status_code=303)
 
@@ -428,7 +470,10 @@ def process_payment(
 
     if payment_method == "yookassa":
         if not YOOKASSA_SHOP_ID:
-            return RedirectResponse(url=f"/payment/{order_id}/demo", status_code=303)
+            if _demo_payments_enabled():
+                return RedirectResponse(url=f"/payment/{order_id}/demo", status_code=303)
+            request.session["payment_error"] = "YooKassa не настроена. Демо-оплата отключена для безопасной выгрузки."
+            return RedirectResponse(url=f"/payment/{order_id}", status_code=303)
         confirmation_url, error, yookassa_payment_id = _create_yookassa_payment(
             order,
             user,
@@ -483,7 +528,12 @@ async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
     if not payment_id or not order_id:
         return {"ok": False}
 
-    order = db.query(Order).filter(Order.id == int(order_id)).first()
+    try:
+        order_id_int = int(order_id)
+    except (TypeError, ValueError):
+        return {"ok": False}
+
+    order = db.query(Order).filter(Order.id == order_id_int).first()
     if not order:
         return {"ok": False}
 
@@ -494,6 +544,28 @@ async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
     ).order_by(Transaction.id.desc()).first()
 
     if event == "payment.succeeded":
+        if not tx or tx.status != "pending":
+            return {"ok": False}
+        verified_payment, verify_error = _fetch_yookassa_payment(str(payment_id))
+        if verify_error or not verified_payment:
+            return {"ok": False}
+        verified_metadata = verified_payment.get("metadata") or {}
+        verified_amount = verified_payment.get("amount") or {}
+        try:
+            verified_value = Decimal(str(verified_amount.get("value", "0"))).quantize(Decimal("0.01"))
+            order_value = Decimal(order.total_price or 0).quantize(Decimal("0.01"))
+        except Exception:
+            return {"ok": False}
+        if (
+            verified_payment.get("status") != "succeeded"
+            or verified_payment.get("paid") is not True
+            or str(verified_payment.get("id")) != str(payment_id)
+            or str(verified_metadata.get("order_id")) != str(order.id)
+            or str(verified_metadata.get("user_id")) != str(order.user_id)
+            or verified_amount.get("currency") != "RUB"
+            or verified_value != order_value
+        ):
+            return {"ok": False}
         if not is_order_payable(order.status, order.payment_status):
             if tx and tx.status == "pending":
                 tx.status = "failed"
@@ -506,10 +578,25 @@ async def yookassa_webhook(request: Request, db: Session = Depends(get_db)):
         db.commit()
         return {"ok": True}
 
-    if event in {"payment.canceled", "payment.waiting_for_capture"}:
-        if tx and tx.status == "pending":
-            tx.status = "failed"
-            db.commit()
+    if event == "payment.waiting_for_capture":
+        return {"ok": True}
+
+    if event == "payment.canceled":
+        if not tx or tx.status != "pending":
+            return {"ok": False}
+        verified_payment, verify_error = _fetch_yookassa_payment(str(payment_id))
+        if verify_error or not verified_payment:
+            return {"ok": False}
+        verified_metadata = verified_payment.get("metadata") or {}
+        if (
+            verified_payment.get("status") != "canceled"
+            or str(verified_payment.get("id")) != str(payment_id)
+            or str(verified_metadata.get("order_id")) != str(order.id)
+            or str(verified_metadata.get("user_id")) != str(order.user_id)
+        ):
+            return {"ok": False}
+        tx.status = "failed"
+        db.commit()
         return {"ok": True}
 
     return {"ok": True}

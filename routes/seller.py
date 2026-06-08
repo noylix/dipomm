@@ -1016,10 +1016,6 @@ def seller_update_profile(
     user.product_categories = product_categories.strip() or None
     user.farm_description = farm_description.strip() or None
     user.inn = None
-    user.supplier_registration_data = None
-    user.supplier_bank_details = None
-    user.passport_photo_url = None
-    user.supplier_document_url = None
     farm_photo_url = _save_farm_photo(farm_photo)
     if farm_photo_url:
         user.farm_photo_url = farm_photo_url

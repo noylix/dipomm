@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from auth import get_optional_user, check_role, hash_password, is_email_verified, verify_password
-from config import APP_BASE_URL, IS_PRODUCTION
+from config import APP_BASE_URL, ENABLE_PASSWORD_RESET_DEMO_LINKS, IS_PRODUCTION
 from database import get_db
 from email_utils import send_email, smtp_is_configured
 from models import Notification, User
@@ -217,7 +217,7 @@ def forgot_password_submit(
 
     request.session["password_reset_email"] = email
     request.session["password_reset_mail_sent"] = mail_sent
-    if reset_link and (not IS_PRODUCTION or not smtp_is_configured()):
+    if reset_link and ENABLE_PASSWORD_RESET_DEMO_LINKS and not IS_PRODUCTION and not smtp_is_configured():
         request.session["password_reset_demo_link"] = reset_link
     else:
         request.session.pop("password_reset_demo_link", None)
@@ -504,10 +504,6 @@ def become_seller_submit(
         inn=None,
         farm_address=farm_address,
         farm_description=farm_description or None,
-        passport_photo_url=None,
-        supplier_registration_data=None,
-        supplier_document_url=None,
-        supplier_bank_details=None,
         product_categories=product_categories,
         seller_application_status="pending",
         seller_application_rejection_reason=None,

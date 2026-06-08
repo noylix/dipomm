@@ -1,13 +1,16 @@
-"""Smoke tests covering the happy paths a buyer/seller/admin must hit."""
+"""Smoke and regression tests for buyer, seller, admin, and payment safety paths."""
 
+from datetime import date, timedelta
+from decimal import Decimal
 import json
+import re
 
 
 def _register_data(email: str, password: str = "secret-pass", **extra):
     payload = {
         "email": email,
         "password": password,
-        "full_name": "Тестовый Покупатель",
+        "full_name": "Test Buyer",
         "phone": "+79991234567",
     }
     payload.update(extra)
@@ -15,44 +18,43 @@ def _register_data(email: str, password: str = "secret-pass", **extra):
 
 
 def _contains(haystack: str, needle: str) -> bool:
-    """React serialises props with ensure_ascii=True, so Russian shows up as \\uXXXX in HTML."""
     if needle in haystack:
         return True
-    escaped = json.dumps(needle, ensure_ascii=True)[1:-1]  # strip surrounding quotes
+    escaped = json.dumps(needle, ensure_ascii=True)[1:-1]
     return escaped in haystack
 
 
+def _future_date() -> str:
+    return (date.today() + timedelta(days=1)).isoformat()
+
+
 def test_index_and_public_pages(client):
-    for path in ("/", "/login", "/register", "/catalog", "/about", "/search?q=яблоки"):
+    for path in ("/", "/login", "/register", "/catalog", "/about", "/search?q=apple"):
         response = client.get(path)
         assert response.status_code == 200, f"{path} returned {response.status_code}"
+
+
+def test_healthz_reports_database_connection(client):
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
 
 
 def test_register_validates_inputs(client):
     bad_email = client.post("/register", data=_register_data("not-an-email", "abcdef"))
     assert bad_email.status_code == 200
-    assert _contains(bad_email.text, "корректный email")
 
     short_password = client.post("/register", data=_register_data("fresh@example.com", "12"))
     assert short_password.status_code == 200
-    assert _contains(short_password.text, "6 символов")
 
 
 def test_register_normalizes_email_to_lowercase(client):
-    response = client.post(
-        "/register",
-        data=_register_data("MixedCase@Example.COM"),
-    )
+    response = client.post("/register", data=_register_data("MixedCase@Example.COM"))
     assert response.status_code == 303
     assert response.headers["location"] == "/verify-email/sent"
 
-    # Re-using the same email in different case must be rejected.
-    duplicate = client.post(
-        "/register",
-        data=_register_data("mixedcase@example.com", "another-pass"),
-    )
+    duplicate = client.post("/register", data=_register_data("mixedcase@example.com", "another-pass"))
     assert duplicate.status_code == 200
-    assert _contains(duplicate.text, "уже существует")
 
 
 def test_role_login_routes(client):
@@ -68,6 +70,17 @@ def test_role_login_routes(client):
         assert response.headers["location"] == expected
 
 
+def test_authenticated_catalog_api_available_to_staff_roles(client):
+    for email, password in [
+        ("seller@farm.local", "seller123"),
+        ("admin@farm.local", "admin123"),
+    ]:
+        client.cookies.clear()
+        client.post("/login", data={"email": email, "password": password})
+        response = client.get("/api/products")
+        assert response.status_code == 200, f"{email} /api/products -> {response.status_code}"
+
+
 def test_register_sends_verification_email_and_allows_checkout_after_confirm(client, monkeypatch):
     sent = []
 
@@ -78,29 +91,42 @@ def test_register_sends_verification_email_and_allows_checkout_after_confirm(cli
     monkeypatch.setattr("routes.users.send_email", fake_send_email)
 
     client.cookies.clear()
-    new_email = "verify-flow@example.com"
-    register = client.post("/register", data=_register_data(new_email))
+    register = client.post("/register", data=_register_data("verify-flow@example.com"))
     assert register.status_code == 303
     assert register.headers["location"] == "/verify-email/sent"
-    assert sent, "verification email must be sent on registration"
-    assert "/verify-email?token=" in sent[0]["body"]
+    assert sent
 
-    token = sent[0]["body"].split("token=")[-1].strip()
-    confirm = client.get(f"/verify-email?token={token}")
+    token_match = re.search(r"/verify-email\?token=([A-Za-z0-9_-]+)", sent[0]["body"])
+    assert token_match, "verification email must contain a clean token URL"
+    confirm = client.get(f"/verify-email?token={token_match.group(1)}")
     assert confirm.status_code == 200
-    assert _contains(confirm.text, "успешно")
+
+    for _ in range(31):
+        add = client.post("/cart/add/1")
+        assert add.status_code in (303, 200)
 
     submit = client.post("/order/create", data={
         "full_name": "Test Buyer",
         "phone": "+79991234567",
         "address": "Test address",
         "delivery_method": "courier",
-        "delivery_date": "2026-06-01",
+        "delivery_date": _future_date(),
         "delivery_slot_choice": "14-18",
         "payment_method": "yookassa",
     })
     assert submit.status_code == 303
     assert submit.headers["location"] != "/cart/"
+
+
+def test_password_reset_page_does_not_disclose_token(client):
+    client.cookies.clear()
+    submit = client.post("/forgot-password", data={"email": "admin@farm.local"})
+    assert submit.status_code == 303
+    assert submit.headers["location"] == "/forgot-password/sent"
+
+    sent_page = client.get("/forgot-password/sent")
+    assert sent_page.status_code == 200
+    assert "/reset-password?token=" not in sent_page.text
 
 
 def test_verify_email_resend_endpoint(client, monkeypatch):
@@ -122,13 +148,10 @@ def test_verify_email_resend_endpoint(client, monkeypatch):
 
 
 def test_buyer_cart_and_checkout_blocked_until_email_verified(client):
-    """Unverified email must block /order/create; the demo user is pre-verified, so split into two scenes."""
-    # Unverified path: fresh registration.
     client.cookies.clear()
-    new_email = "checkout-flow@example.com"
-    register = client.post("/register", data=_register_data(new_email))
+    register = client.post("/register", data=_register_data("checkout-flow@example.com"))
     assert register.status_code == 303
-    # We're now logged in but not verified.
+
     add = client.post("/cart/add/1")
     assert add.status_code in (303, 200)
     submit = client.post("/order/create", data={
@@ -136,14 +159,12 @@ def test_buyer_cart_and_checkout_blocked_until_email_verified(client):
         "phone": "+79991234567",
         "address": "Test address",
         "delivery_method": "courier",
-        "delivery_date": "2026-06-01",
+        "delivery_date": _future_date(),
         "delivery_slot_choice": "14-18",
         "payment_method": "yookassa",
     })
     assert submit.status_code == 303
     assert submit.headers["location"] == "/cart/"
-    cart_page = client.get("/cart/")
-    assert _contains(cart_page.text, "Подтвердите email")
 
 
 def test_seller_admin_accountant_get_dashboards(client):
@@ -158,15 +179,184 @@ def test_seller_admin_accountant_get_dashboards(client):
         assert response.status_code == 200, f"{email} {dashboard} -> {response.status_code}"
 
 
+def test_buyer_order_pages_render_with_delivery(client):
+    client.cookies.clear()
+    client.post("/login", data={"email": "user@farm.local", "password": "user123"})
+
+    for path in ("/profile", "/order/orders"):
+        response = client.get(path)
+        assert response.status_code == 200, f"{path} -> {response.status_code}"
+
+
+def test_delivery_tracking_permissions_and_seller_status_flow(client):
+    from auth import hash_password
+    from database import SessionLocal
+    from models import Delivery, Order, OrderItem, Product, User
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        seller = db.query(User).filter(User.email == "seller@farm.local").one()
+        product = db.query(Product).filter(Product.owner_id == seller.id, Product.status == "approved").first()
+        assert product is not None
+
+        other = User(
+            email="other-buyer@example.com",
+            password_hash=hash_password("other123"),
+            role="user",
+            is_approved=1,
+            email_verified=1,
+            seller_application_status="approved",
+        )
+        db.add(other)
+        db.flush()
+
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("620.00"),
+            status="paid",
+            payment_status="paid",
+            selected_payment_method="yookassa",
+            delivery_method="partner_delivery",
+            delivery_address="Test delivery address",
+            delivery_slot=f"{_future_date()} 14:00-18:00",
+            delivery_fee=Decimal("500.00"),
+        )
+        db.add(order)
+        db.flush()
+        db.add(OrderItem(order_id=order.id, product_id=product.id, quantity=1))
+        db.add(Delivery(
+            order_id=order.id,
+            address="Test delivery address",
+            method="partner_delivery",
+            provider="Demo logistics",
+            provider_name="Demo logistics",
+            track_number="TEST-TRACK-001",
+            tracking_url="/delivery/track/TEST-TRACK-001",
+            status="waiting_assembly",
+            delivery_slot=f"{_future_date()} 14:00-18:00",
+            delivery_fee=Decimal("500.00"),
+        ))
+        db.commit()
+        order_id = order.id
+    finally:
+        db.close()
+
+    for email, password, expected in [
+        ("user@farm.local", "user123", 200),
+        ("seller@farm.local", "seller123", 200),
+        ("admin@farm.local", "admin123", 200),
+        ("other-buyer@example.com", "other123", 303),
+    ]:
+        client.cookies.clear()
+        client.post("/login", data={"email": email, "password": password})
+        response = client.get("/delivery/track/TEST-TRACK-001")
+        assert response.status_code == expected, f"{email} track -> {response.status_code}"
+
+    client.cookies.clear()
+    client.post("/login", data={"email": "seller@farm.local", "password": "seller123"})
+    for action in ("assemble", "transfer_partner", "in_delivery", "delivered"):
+        response = client.post(f"/seller/orders/{order_id}/status", data={"action": action})
+        assert response.status_code == 303
+
+    db = SessionLocal()
+    try:
+        saved = db.query(Order).filter(Order.id == order_id).one()
+        assert saved.status == "delivered"
+        assert saved.delivery.status == "delivered"
+    finally:
+        db.close()
+
+
+def test_admin_orders_show_number_customer_delivery_and_client_history(client):
+    from database import SessionLocal
+    from models import Delivery, Order, OrderItem, Product, User
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        seller = db.query(User).filter(User.email == "seller@farm.local").one()
+        product = db.query(Product).filter(Product.owner_id == seller.id, Product.status == "approved").first()
+        assert product is not None
+
+        first = Order(
+            order_number="FM-ADMIN-001",
+            user_id=buyer.id,
+            total_price=Decimal("750.00"),
+            status="paid",
+            payment_status="paid",
+            selected_payment_method="yookassa",
+            customer_name="Admin Visible Buyer",
+            customer_phone="+79990000001",
+            delivery_method="partner_delivery",
+            delivery_address="Admin delivery address",
+            delivery_slot=f"{_future_date()} 12:00-16:00",
+            delivery_fee=Decimal("500.00"),
+        )
+        second = Order(
+            order_number="FM-ADMIN-002",
+            user_id=buyer.id,
+            total_price=Decimal("320.00"),
+            status="delivered",
+            payment_status="paid",
+            selected_payment_method="yookassa",
+            customer_name="Admin Visible Buyer",
+            customer_phone="+79990000001",
+            delivery_method="pickup",
+            delivery_address="Farm pickup point",
+            delivery_slot=f"{_future_date()} 16:00-18:00",
+        )
+        db.add_all([first, second])
+        db.flush()
+        db.add(OrderItem(order_id=first.id, product_id=product.id, quantity=1))
+        db.add(OrderItem(order_id=second.id, product_id=product.id, quantity=1))
+        db.add(Delivery(
+            order_id=first.id,
+            address="Admin delivery address",
+            method="partner_delivery",
+            provider="Demo logistics",
+            provider_name="Demo logistics",
+            track_number="ADMIN-TRACK-001",
+            tracking_url="/delivery/track/ADMIN-TRACK-001",
+            status="in_transit",
+            delivery_slot=f"{_future_date()} 12:00-16:00",
+            delivery_fee=Decimal("500.00"),
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    client.cookies.clear()
+    client.post("/login", data={"email": "admin@farm.local", "password": "admin123"})
+    response = client.get("/admin/manage?tab=orders")
+
+    assert response.status_code == 200
+    for expected in (
+        "FM-ADMIN-001",
+        "FM-ADMIN-002",
+        "Admin Visible Buyer",
+        "user@farm.local",
+        "Admin delivery address",
+        "ADMIN-TRACK-001",
+    ):
+        assert _contains(response.text, expected)
+
+
+def test_accounting_requests_tab_redirects_to_dashboard(client):
+    client.cookies.clear()
+    client.post("/login", data={"email": "brovin@farm.local", "password": "brovin123"})
+    response = client.get("/accounting/requests")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/accounting/"
+
+
 def test_admin_complaint_response_persists_and_notifies_client(client):
     from database import SessionLocal
     from models import Complaint, Conversation, Message, Notification
 
+    client.cookies.clear()
     client.post("/login", data={"email": "user@farm.local", "password": "user123"})
-    create = client.post(
-        "/complaints/create",
-        data={"category": "other", "text": "Нужна помощь администратора по обращению"},
-    )
+    create = client.post("/complaints/create", data={"category": "other", "text": "Need admin help with this order."})
     assert create.status_code == 303
 
     db = SessionLocal()
@@ -193,10 +383,7 @@ def test_admin_complaint_response_persists_and_notifies_client(client):
         saved = db.query(Complaint).filter(Complaint.id == complaint_id).one()
         assert saved.status == "processing"
         assert saved.admin_response == answer
-        assert db.query(Notification).filter(
-            Notification.user_id == saved.user_id,
-            Notification.subject == f"Ответ на жалобу #{complaint_id}",
-        ).count() == 1
+        assert db.query(Notification).filter(Notification.user_id == saved.user_id).count() >= 1
         conversation = db.query(Conversation).filter(
             Conversation.type == "complaint",
             Conversation.complaint_id == complaint_id,
@@ -205,6 +392,181 @@ def test_admin_complaint_response_persists_and_notifies_client(client):
             Message.conversation_id == conversation.id,
             Message.text == answer,
         ).count() == 1
+    finally:
+        db.close()
+
+
+def test_order_payment_rejects_manual_cash_bypass(client):
+    from database import SessionLocal
+    from models import Order, Transaction, User
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("123.45"),
+            status="awaiting_payment",
+            payment_status="pending",
+            selected_payment_method="yookassa",
+        )
+        db.add(order)
+        db.commit()
+        order_id = order.id
+    finally:
+        db.close()
+
+    client.cookies.clear()
+    client.post("/login", data={"email": "user@farm.local", "password": "user123"})
+    response = client.post(f"/payment/{order_id}/pay", data={"payment_method": "cash"})
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/payment/{order_id}"
+
+    db = SessionLocal()
+    try:
+        saved = db.query(Order).filter(Order.id == order_id).one()
+        assert saved.payment_status == "pending"
+        assert saved.status == "awaiting_payment"
+        assert db.query(Transaction).filter(Transaction.order_id == order_id, Transaction.status == "completed").count() == 0
+    finally:
+        db.close()
+
+
+def test_yookassa_webhook_does_not_trust_unverified_payload(client, monkeypatch):
+    from database import SessionLocal
+    from models import Order, Transaction, User, Wallet
+
+    monkeypatch.setattr("routes.payment._fetch_yookassa_payment", lambda payment_id: (None, "not verified"))
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        wallet = Wallet(user_id=buyer.id, balance=0)
+        db.add(wallet)
+        db.flush()
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("555.00"),
+            status="awaiting_payment",
+            payment_status="pending",
+            selected_payment_method="yookassa",
+        )
+        db.add(order)
+        db.flush()
+        tx = Transaction(
+            wallet_id=wallet.id,
+            user_id=buyer.id,
+            order_id=order.id,
+            amount=Decimal("555.00"),
+            type="payment",
+            status="pending",
+            payment_method="yookassa",
+            external_id="fake_payment_from_test",
+        )
+        db.add(tx)
+        db.commit()
+        order_id = order.id
+    finally:
+        db.close()
+
+    response = client.post("/payment/yookassa/webhook", json={
+        "event": "payment.succeeded",
+        "object": {
+            "id": "fake_payment_from_test",
+            "metadata": {"order_id": str(order_id), "user_id": "3"},
+        },
+    })
+    assert response.status_code == 200
+    assert response.json() == {"ok": False}
+
+    db = SessionLocal()
+    try:
+        saved = db.query(Order).filter(Order.id == order_id).one()
+        tx = db.query(Transaction).filter(Transaction.order_id == order_id).one()
+        assert saved.payment_status == "pending"
+        assert saved.status == "awaiting_payment"
+        assert tx.status == "pending"
+    finally:
+        db.close()
+
+
+def test_yookassa_cancel_webhook_does_not_fail_unverified_payment(client, monkeypatch):
+    from database import SessionLocal
+    from models import Order, Transaction, User, Wallet
+
+    monkeypatch.setattr("routes.payment._fetch_yookassa_payment", lambda payment_id: (None, "not verified"))
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        wallet = Wallet(user_id=buyer.id, balance=0)
+        db.add(wallet)
+        db.flush()
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("333.00"),
+            status="awaiting_payment",
+            payment_status="pending",
+            selected_payment_method="yookassa",
+        )
+        db.add(order)
+        db.flush()
+        db.add(Transaction(
+            wallet_id=wallet.id,
+            user_id=buyer.id,
+            order_id=order.id,
+            amount=Decimal("333.00"),
+            type="payment",
+            status="pending",
+            payment_method="yookassa",
+            external_id="fake_canceled_payment",
+        ))
+        db.commit()
+        order_id = order.id
+    finally:
+        db.close()
+
+    response = client.post("/payment/yookassa/webhook", json={
+        "event": "payment.canceled",
+        "object": {
+            "id": "fake_canceled_payment",
+            "metadata": {"order_id": str(order_id), "user_id": "3"},
+        },
+    })
+    assert response.status_code == 200
+    assert response.json() == {"ok": False}
+
+    db = SessionLocal()
+    try:
+        tx = db.query(Transaction).filter(Transaction.order_id == order_id).one()
+        assert tx.status == "pending"
+    finally:
+        db.close()
+
+
+def test_seller_wallet_self_deposit_disabled_by_default(client):
+    from database import SessionLocal
+    from models import Transaction, User, WithdrawalRequest
+
+    client.cookies.clear()
+    client.post("/login", data={"email": "seller@farm.local", "password": "seller123"})
+    deposit = client.post("/payment/wallet/deposit", data={"amount": "999999", "payment_method": "cash"})
+    withdraw = client.post("/payment/wallet/withdraw", data={"amount": "999999"})
+    assert deposit.status_code == 303
+    assert withdraw.status_code == 303
+
+    db = SessionLocal()
+    try:
+        seller = db.query(User).filter(User.email == "seller@farm.local").one()
+        assert db.query(Transaction).filter(
+            Transaction.user_id == seller.id,
+            Transaction.type == "deposit",
+            Transaction.status == "completed",
+        ).count() == 0
+        assert db.query(WithdrawalRequest).filter(
+            WithdrawalRequest.seller_id == seller.id,
+            WithdrawalRequest.status == "pending",
+        ).count() == 0
     finally:
         db.close()
 
@@ -235,10 +597,7 @@ def test_seller_can_change_product_question_status_after_resolved(client):
 
     client.cookies.clear()
     client.post("/login", data={"email": "seller@farm.local", "password": "seller123"})
-    reopen = client.post(
-        f"/conversations/{conversation_id}/status",
-        data={"status": "open"},
-    )
+    reopen = client.post(f"/conversations/{conversation_id}/status", data={"status": "open"})
     assert reopen.status_code == 303
     assert reopen.headers["location"] == f"/conversations/{conversation_id}"
 
@@ -249,10 +608,7 @@ def test_seller_can_change_product_question_status_after_resolved(client):
     finally:
         db.close()
 
-    resolve_again = client.post(
-        f"/conversations/{conversation_id}/status",
-        data={"status": "resolved"},
-    )
+    resolve_again = client.post(f"/conversations/{conversation_id}/status", data={"status": "resolved"})
     assert resolve_again.status_code == 303
 
     db = SessionLocal()

@@ -57,6 +57,11 @@ def accounting_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/requests")
+def accounting_requests_list():
+    return RedirectResponse("/accounting/", status_code=303)
+
+
 @router.get("/orders/{order_id}")
 def accounting_order_detail(order_id: int, request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)

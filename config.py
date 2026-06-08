@@ -50,6 +50,9 @@ def env_flag(name: str, default: bool = False) -> bool:
 
 AUTO_SEED_DEMO_DATA = env_flag("APP_SEED_DEMO_DATA", default=not IS_PRODUCTION)
 SMTP_USE_TLS = env_flag("SMTP_USE_TLS", default=True)
+ENABLE_DEMO_PAYMENTS = env_flag("ENABLE_DEMO_PAYMENTS", default=False)
+ENABLE_PASSWORD_RESET_DEMO_LINKS = env_flag("ENABLE_PASSWORD_RESET_DEMO_LINKS", default=False)
+ENABLE_SELLER_WALLET_DEPOSITS = env_flag("ENABLE_SELLER_WALLET_DEPOSITS", default=False)
 
 if IS_PRODUCTION and not SESSION_SECRET_KEY:
     raise RuntimeError(
