@@ -2638,7 +2638,7 @@
                                     name: `cdek_city_${key}`,
                                     placeholder: "\u0413\u043e\u0440\u043e\u0434 \u0421\u0414\u042d\u041a",
                                     value: cdek.city || "",
-                                    onChange: e => setCdekChoice(key, { city: e.target.value, city_code: "", points: [], delivery_point: "", quote: null }),
+                                    onChange: e => setCdekChoice(key, { city: e.target.value, city_code: "", points: [], delivery_point: "", quote: null, message: "" }),
                                     required: true,
                                     maxLength: 120
                                 }),
@@ -2647,12 +2647,12 @@
                                 h("input", { type: "hidden", name: `cdek_delivery_type_${key}`, value: cdek.delivery_type || "pickup" }),
                                 h("input", { type: "hidden", name: `cdek_delivery_point_${key}`, value: cdek.delivery_point || "" }),
                                 h("div", { className: "wide react-chip-row" }, [
-                                    h("button", { type: "button", className: `react-chip react-chip-button ${(cdek.delivery_type || "pickup") === "pickup" ? "active" : ""}`, onClick: () => setCdekChoice(key, { delivery_type: "pickup", quote: null }) }, "\u041f\u0412\u0417"),
-                                    h("button", { type: "button", className: `react-chip react-chip-button ${cdek.delivery_type === "door" ? "active" : ""}`, onClick: () => setCdekChoice(key, { delivery_type: "door", quote: null }) }, "\u0414\u043e \u0434\u0432\u0435\u0440\u0438")
+                                    h("button", { type: "button", className: `react-chip react-chip-button ${(cdek.delivery_type || "pickup") === "pickup" ? "active" : ""}`, onClick: () => setCdekChoice(key, { delivery_type: "pickup", quote: null, message: "" }) }, "\u041f\u0412\u0417"),
+                                    h("button", { type: "button", className: `react-chip react-chip-button ${cdek.delivery_type === "door" ? "active" : ""}`, onClick: () => setCdekChoice(key, { delivery_type: "door", quote: null, message: "" }) }, "\u0414\u043e \u0434\u0432\u0435\u0440\u0438")
                                 ]),
                                 (cdek.delivery_type || "pickup") === "pickup" ? h("div", { className: "wide react-stack" }, [
                                     h("button", { type: "button", className: "react-btn secondary", onClick: () => loadCdekPoints(key) }, "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u041f\u0412\u0417"),
-                                    (cdek.points || []).length ? h("select", { className: "react-input", value: cdek.delivery_point || "", onChange: e => setCdekChoice(key, { delivery_point: e.target.value, quote: null }) },
+                                    (cdek.points || []).length ? h("select", { className: "react-input", value: cdek.delivery_point || "", onChange: e => setCdekChoice(key, { delivery_point: e.target.value, quote: null, message: "" }) },
                                         (cdek.points || []).map(point => h("option", { key: point.code, value: point.code }, `${point.code} \u00b7 ${point.address || point.name || ""}`))
                                     ) : null
                                 ]) : Field({
