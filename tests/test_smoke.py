@@ -347,6 +347,121 @@ def test_logistics_supports_current_delivery_methods(client):
         db.close()
 
 
+def test_cdek_quote_endpoint_uses_cart_items(client, monkeypatch):
+    from decimal import Decimal
+    from cdek_delivery import CdekDeliveryQuote
+    from database import SessionLocal
+    from models import Product
+
+    seen = {}
+
+    def fake_quote(items, to_city_code, delivery_type="pickup"):
+        seen["items"] = list(items)
+        seen["city"] = to_city_code
+        seen["type"] = delivery_type
+        return CdekDeliveryQuote(
+            delivery_sum=Decimal("432.10"),
+            tariff_code=136,
+            delivery_type=delivery_type,
+            period_min=2,
+            period_max=4,
+        )
+
+    monkeypatch.setattr("routes.delivery.calculate_cdek_delivery_quote", fake_quote)
+
+    client.cookies.clear()
+    client.post("/login", data={"email": "user@farm.local", "password": "user123"})
+    add = client.post("/cart/add/1")
+    assert add.status_code in (200, 303)
+    db = SessionLocal()
+    try:
+        seller_id = db.query(Product).filter(Product.id == 1).one().owner_id
+    finally:
+        db.close()
+    response = client.post("/delivery/cdek/quote", data={
+        "seller_id": str(seller_id),
+        "city_code": "44",
+        "delivery_type": "pickup",
+    })
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["delivery_sum"] == 432.1
+    assert payload["tariff_code"] == 136
+    assert seen["city"] == 44
+    assert seen["type"] == "pickup"
+    assert seen["items"]
+
+
+def test_paid_cdek_order_registers_real_shipment(monkeypatch):
+    from database import SessionLocal
+    from models import Delivery, Order, User
+    from routes.payment import _mark_order_paid
+
+    class Registration:
+        uuid = "11111111-2222-3333-4444-555555555555"
+        cdek_number = "1105661402"
+        status = "ACCEPTED"
+
+    calls = []
+
+    def fake_create(order, to_city_code, delivery_type, delivery_point=None, address=None):
+        calls.append({
+            "order_id": order.id,
+            "city": to_city_code,
+            "type": delivery_type,
+            "point": delivery_point,
+            "address": address,
+        })
+        return Registration()
+
+    monkeypatch.setattr("routes.payment.create_cdek_order", fake_create)
+
+    db = SessionLocal()
+    try:
+        buyer = db.query(User).filter(User.email == "user@farm.local").one()
+        order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("100.00"),
+            status="awaiting_payment",
+            payment_status="pending",
+            customer_name="Test Buyer",
+            customer_phone="+79991234567",
+            delivery_method="partner_delivery",
+        )
+        db.add(order)
+        db.flush()
+        delivery = Delivery(
+            order_id=order.id,
+            method="partner_delivery",
+            provider="СДЭК (тест)",
+            provider_name="СДЭК (тест)",
+            external_id="CDEK-PENDING:44:pickup:MSK1",
+            track_number="CDEKTEST",
+            tracking_url="/delivery/track/CDEKTEST",
+        )
+        db.add(delivery)
+        db.flush()
+
+        _mark_order_paid(order, "verified-payment", db)
+
+        assert calls == [{
+            "order_id": order.id,
+            "city": 44,
+            "type": "pickup",
+            "point": "MSK1",
+            "address": None,
+        }]
+        assert delivery.external_id == Registration.uuid
+        assert delivery.track_number == Registration.cdek_number
+        assert delivery.tracking_url == f"/delivery/track/{Registration.cdek_number}"
+        assert delivery.status == Registration.status
+    finally:
+        db.rollback()
+        db.close()
+
+
 def test_delivery_tracking_permissions_and_seller_status_flow(client):
     from auth import hash_password
     from database import SessionLocal

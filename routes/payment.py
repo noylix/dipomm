@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from decimal import Decimal
 from config import APP_BASE_URL, ENABLE_DEMO_PAYMENTS, ENABLE_SELLER_WALLET_DEPOSITS, IS_PRODUCTION
 
+from cdek_delivery import CDEK_PROVIDER_NAME, create_cdek_order
 from database import get_db
 from models import User, Wallet, Transaction, PaymentMethod, Order, OrderItem
 from auth import get_optional_user, check_role
@@ -51,6 +52,35 @@ def _redirect_if_wallet_disabled(user: User | None, request: Request) -> Redirec
     return None
 
 
+def _create_cdek_shipment_after_payment(order: Order) -> None:
+    delivery = order.delivery
+    if not delivery or delivery.provider != CDEK_PROVIDER_NAME:
+        return
+    external_id = (delivery.external_id or "").strip()
+    if not external_id.startswith("CDEK-PENDING:"):
+        return
+    try:
+        _, city_code, delivery_type, delivery_point = external_id.split(":", 3)
+        registration = create_cdek_order(
+            order,
+            to_city_code=int(city_code),
+            delivery_type=delivery_type,
+            delivery_point=delivery_point or None,
+            address=delivery.address or order.delivery_address,
+        )
+        delivery.external_id = registration.uuid
+        if registration.cdek_number:
+            delivery.track_number = registration.cdek_number
+            delivery.tracking_url = f"/delivery/track/{registration.cdek_number}"
+        delivery.status = registration.status or "created"
+    except Exception as exc:
+        delivery.status = "cdek_error"
+        delivery.comment = "\n".join(filter(None, [
+            delivery.comment or "",
+            f"Ошибка создания заявки СДЭК: {exc}",
+        ]))[:2000]
+
+
 def _mark_order_paid(order: Order, payment_id: str | None = None, db: Session | None = None) -> None:
     amount = Decimal(order.total_price or 0)
     order.payment_status = "paid"
@@ -61,6 +91,7 @@ def _mark_order_paid(order: Order, payment_id: str | None = None, db: Session | 
     order.paid_at = datetime.utcnow()
     if order.delivery:
         order.delivery.status = "waiting_assembly"
+        _create_cdek_shipment_after_payment(order)
     if db is not None:
         from finance_ledger import record_escrow_hold_on_payment
 

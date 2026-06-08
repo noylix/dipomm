@@ -2447,6 +2447,14 @@
         const minOrderMessage = props.min_order_message || `\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430 \u0437\u0430\u043a\u0430\u0437\u0430: ${money(minOrderAmount)}. \u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u0442\u043e\u0432\u0430\u0440\u043e\u0432 \u0435\u0449\u0451 \u043d\u0430 ${money(minOrderShortage)}.`;
         const activeGroups = groups.filter(group => (group.cart_items || []).length > 0);
         const multipleSellers = activeGroups.length > 1;
+        const [cdekChoices, setCdekChoices] = React.useState(() => {
+            const initial = {};
+            activeGroups.forEach(group => {
+                const key = group.seller_id === null || group.seller_id === undefined ? "__none__" : String(group.seller_id);
+                initial[key] = { city: "\u041c\u043e\u0441\u043a\u0432\u0430", city_code: "44", delivery_type: "pickup", delivery_point: "", points: [], quote: null, message: "" };
+            });
+            return initial;
+        });
         const [deliveryChoices, setDeliveryChoices] = React.useState(() => {
             const initial = {};
             activeGroups.forEach(group => {
@@ -2458,11 +2466,18 @@
             return initial;
         });
         const setChoice = (key, patch) => setDeliveryChoices(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
+        const setCdekChoice = (key, patch) => setCdekChoices(prev => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
         const optionFor = (group, method) => (group.delivery_options || []).find(option => option.method === method) || {};
+        const selectedDeliveryFee = (group, key, method) => {
+            if (method === "partner_delivery" && cdekChoices[key] && cdekChoices[key].quote) {
+                return Number(cdekChoices[key].quote.delivery_sum || 0);
+            }
+            return Number(optionFor(group, method).fee || 0);
+        };
         const deliveryTotal = activeGroups.reduce((sum, group) => {
             const key = group.seller_id === null || group.seller_id === undefined ? "__none__" : String(group.seller_id);
             const choice = deliveryChoices[key] || {};
-            return sum + Number(optionFor(group, choice.method).fee || 0);
+            return sum + selectedDeliveryFee(group, key, choice.method);
         }, 0);
         const discountAmount = couponPreview && couponPreview.ok ? Number(couponPreview.discount_amount || 0) : 0;
         const grandTotal = Math.max(0, goodsTotal + deliveryTotal - discountAmount);
@@ -2498,6 +2513,78 @@
                 })
                 .finally(() => setCouponLoading(false));
         };
+        const findCdekCity = (key) => {
+            const state = cdekChoices[key] || {};
+            const city = (state.city || "").trim();
+            if (city.length < 2) {
+                setCdekChoice(key, { message: "Введите город." });
+                return;
+            }
+            setCdekChoice(key, { message: "Ищем город СДЭК..." });
+            fetch(`/delivery/cdek/cities?city=${encodeURIComponent(city)}`, { headers: { "Accept": "application/json" } })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.ok || !(data.cities || []).length) throw new Error(data.message || "Город не найден");
+                    const cityRow = data.cities[0];
+                    setCdekChoice(key, {
+                        city: cityRow.city,
+                        city_code: String(cityRow.code),
+                        message: `${cityRow.city}${cityRow.region ? ", " + cityRow.region : ""}`,
+                        points: [],
+                        delivery_point: "",
+                        quote: null
+                    });
+                })
+                .catch(error => setCdekChoice(key, { message: error.message || "Не удалось найти город СДЭК." }));
+        };
+        const loadCdekPoints = (key) => {
+            const state = cdekChoices[key] || {};
+            if (!state.city_code) {
+                setCdekChoice(key, { message: "Сначала выберите город СДЭК." });
+                return;
+            }
+            setCdekChoice(key, { message: "Загружаем ПВЗ СДЭК..." });
+            fetch(`/delivery/cdek/points?city_code=${encodeURIComponent(state.city_code)}`, { headers: { "Accept": "application/json" } })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.ok || !(data.points || []).length) throw new Error(data.message || "ПВЗ не найдены");
+                    setCdekChoice(key, {
+                        points: data.points,
+                        delivery_point: data.points[0].code,
+                        message: `Найдено ПВЗ: ${data.points.length}`,
+                        quote: null
+                    });
+                })
+                .catch(error => setCdekChoice(key, { message: error.message || "Не удалось загрузить ПВЗ СДЭК." }));
+        };
+        const calculateCdekQuote = (group, key) => {
+            const state = cdekChoices[key] || {};
+            if (!state.city_code) {
+                setCdekChoice(key, { message: "Сначала выберите город СДЭК." });
+                return;
+            }
+            if ((state.delivery_type || "pickup") === "pickup" && !state.delivery_point) {
+                setCdekChoice(key, { message: "Выберите ПВЗ СДЭК." });
+                return;
+            }
+            const body = new FormData();
+            body.append("seller_id", String(group.seller_id));
+            body.append("city_code", String(state.city_code));
+            body.append("delivery_type", state.delivery_type || "pickup");
+            setCdekChoice(key, { message: "Считаем тариф СДЭК..." });
+            fetch("/delivery/cdek/quote", {
+                method: "POST",
+                body,
+                headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.ok) throw new Error(data.message || "СДЭК не рассчитал тариф");
+                    const period = data.period_min || data.period_max ? `, ${data.period_min || data.period_max}-${data.period_max || data.period_min} дн.` : "";
+                    setCdekChoice(key, { quote: data, message: `Тариф СДЭК: ${money(data.delivery_sum)}${period}` });
+                })
+                .catch(error => setCdekChoice(key, { quote: null, message: error.message || "Не удалось рассчитать СДЭК." }));
+        };
         const hasUnavailableDelivery = activeGroups.some(group => !(group.delivery_options || []).length);
         const needsEmailVerification = props.email_verified === false;
         const handleCheckoutSubmit = event => handleSubmitOnce(event);
@@ -2507,13 +2594,14 @@
             const options = group.delivery_options || [];
             const slots = group.delivery_slots && group.delivery_slots.length ? group.delivery_slots : ["10-14", "14-18", "18-22"];
             const choice = deliveryChoices[key] || { method: options[0] && options[0].method || "pickup", date: defaultDate, slot: slots[0] || "10-14" };
+            const cdek = cdekChoices[key] || {};
             const selected = optionFor(group, choice.method);
             const isDelivery = choice.method === "farmer_delivery" || choice.method === "partner_delivery";
             const groupShortage = Math.max(0, Number(group.shortage || 0));
             return h("section", { key: `checkout-${key}`, className: "react-card react-checkout-group" }, [
                 h("div", { className: "react-page-title" }, [
                     h("div", null, [h("h3", null, sellerName), h("p", { className: "react-muted" }, multipleSellers ? "\u0411\u0443\u0434\u0435\u0442 \u0441\u043e\u0437\u0434\u0430\u043d \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u043a\u0430\u0437 \u0443 \u044d\u0442\u043e\u0433\u043e \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430." : "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u043f\u043e\u0441\u043e\u0431 \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f.")]),
-                    h("strong", null, money(Number(group.subtotal || 0) + Number(selected.fee || 0)))
+                    h("strong", null, money(Number(group.subtotal || 0) + selectedDeliveryFee(group, key, choice.method)))
                 ]),
                 groupShortage > 0 && h("span", { className: "react-cart-min-order-warning" }, `\u0414\u043e \u043c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u0437\u0430\u043a\u0430\u0437\u0430 \u0443 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430: ${money(groupShortage)}.`),
                 options.length ? h("div", { className: "react-checkout-methods" }, options.map(option => {
@@ -2522,17 +2610,18 @@
                     const optionDelivery = option.method === "farmer_delivery" || option.method === "partner_delivery";
                     const optionPickupAddress = option.address || option.pickup_address || group.pickup_address || sellerPickupAddress(group.seller);
                     const optionLabel = option.method === "partner_delivery" ? CDEK_TEST_PROVIDER : option.label || deliveryMethodText(option.method);
+                    const optionFee = active ? selectedDeliveryFee(group, key, option.method) : Number(option.fee || 0);
                     return h("div", { key: option.method, className: `react-checkout-method${active ? " is-active" : ""}` }, [
                         h("button", {
                             type: "button",
                             className: `react-chip react-chip-button react-checkout-method-btn${active ? " active" : ""}`,
                             onClick: () => setChoice(key, { method: option.method })
-                        }, `${optionLabel} \u00b7 ${money(option.fee || 0)}`),
+                        }, `${optionLabel} \u00b7 ${money(optionFee)}`),
                         active && optionPickup ? h(PickupAddressBlock, {
                             address: optionPickupAddress,
                             comment: option.comment || ""
                         }) : null,
-                        active && optionDelivery ? Field({
+                        active && optionDelivery && option.method !== "partner_delivery" ? Field({
                             name: `address_${key}`,
                             placeholder: "\u0410\u0434\u0440\u0435\u0441 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438",
                             defaultValue: checkout.address || "",
@@ -2542,7 +2631,40 @@
                         }) : null,
                         active && option.method === "partner_delivery" ? h("div", { className: "react-cdek-delivery-card" }, [
                             h(CdekDeliveryBadge, { method: option.method }),
-                            h("p", null, "\u041f\u043e\u0441\u043b\u0435 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f \u0441\u043e\u0437\u0434\u0430\u0434\u0438\u043c \u0442\u0435\u0441\u0442\u043e\u0432\u044b\u0439 \u0442\u0440\u0435\u043a \u0441 \u043f\u0440\u0435\u0444\u0438\u043a\u0441\u043e\u043c CDEK \u0438 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0435 \u043e\u0442\u0441\u043b\u0435\u0436\u0438\u0432\u0430\u043d\u0438\u0435.")
+                            h("div", { className: "react-form-grid" }, [
+                                h("input", {
+                                    className: "react-input",
+                                    name: `cdek_city_${key}`,
+                                    placeholder: "\u0413\u043e\u0440\u043e\u0434 \u0421\u0414\u042d\u041a",
+                                    value: cdek.city || "",
+                                    onChange: e => setCdekChoice(key, { city: e.target.value, city_code: "", points: [], delivery_point: "", quote: null }),
+                                    required: true,
+                                    maxLength: 120
+                                }),
+                                h("button", { type: "button", className: "react-btn secondary", onClick: () => findCdekCity(key) }, "\u041d\u0430\u0439\u0442\u0438 \u0433\u043e\u0440\u043e\u0434"),
+                                h("input", { type: "hidden", name: `cdek_city_code_${key}`, value: cdek.city_code || "" }),
+                                h("input", { type: "hidden", name: `cdek_delivery_type_${key}`, value: cdek.delivery_type || "pickup" }),
+                                h("input", { type: "hidden", name: `cdek_delivery_point_${key}`, value: cdek.delivery_point || "" }),
+                                h("div", { className: "wide react-chip-row" }, [
+                                    h("button", { type: "button", className: `react-chip react-chip-button ${(cdek.delivery_type || "pickup") === "pickup" ? "active" : ""}`, onClick: () => setCdekChoice(key, { delivery_type: "pickup", quote: null }) }, "\u041f\u0412\u0417"),
+                                    h("button", { type: "button", className: `react-chip react-chip-button ${cdek.delivery_type === "door" ? "active" : ""}`, onClick: () => setCdekChoice(key, { delivery_type: "door", quote: null }) }, "\u0414\u043e \u0434\u0432\u0435\u0440\u0438")
+                                ]),
+                                (cdek.delivery_type || "pickup") === "pickup" ? h("div", { className: "wide react-stack" }, [
+                                    h("button", { type: "button", className: "react-btn secondary", onClick: () => loadCdekPoints(key) }, "\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u041f\u0412\u0417"),
+                                    (cdek.points || []).length ? h("select", { className: "react-input", value: cdek.delivery_point || "", onChange: e => setCdekChoice(key, { delivery_point: e.target.value, quote: null }) },
+                                        (cdek.points || []).map(point => h("option", { key: point.code, value: point.code }, `${point.code} \u00b7 ${point.address || point.name || ""}`))
+                                    ) : null
+                                ]) : Field({
+                                    name: `address_${key}`,
+                                    placeholder: "\u0410\u0434\u0440\u0435\u0441 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0421\u0414\u042d\u041a",
+                                    defaultValue: checkout.address || "",
+                                    className: "wide",
+                                    required: true,
+                                    maxLength: 500
+                                }),
+                                h("button", { type: "button", className: "react-btn", onClick: () => calculateCdekQuote(group, key) }, "\u0420\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u0442\u044c \u0421\u0414\u042d\u041a"),
+                                cdek.message ? h("p", { className: "wide react-muted" }, cdek.message) : null
+                            ])
                         ]) : null,
                         active && optionDelivery && option.comment ? h("p", { className: "react-muted react-checkout-method-note" }, option.comment) : null
                     ]);

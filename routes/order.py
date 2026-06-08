@@ -8,6 +8,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session, joinedload
 
 from auth import check_role, get_optional_user, is_email_verified
+from cdek_delivery import calculate_cdek_delivery_quote, create_test_cdek_shipment
 from coupon_utils import coupon_applies_to_group, evaluate_coupon, group_discounts
 from database import get_db
 from delivery_service import (
@@ -54,8 +55,6 @@ from order_statuses import (
     is_order_receivable,
     normalize_order_status,
 )
-from cdek_delivery import create_test_cdek_shipment
-
 router = APIRouter(prefix="/order", tags=["order"])
 
 PAY_NOW_METHODS = set()
@@ -396,6 +395,11 @@ async def order_create(request: Request, db: Session = Depends(get_db)):
             request.session["cart_error"] = f"{seller.farm_name or seller.full_name or 'Фермер'} не поддерживает выбранный способ получения."
             return RedirectResponse(url="/cart/", status_code=303)
 
+        cdek_city_code = (form.get(f"cdek_city_code_{key}") or "").strip()
+        cdek_city = (form.get(f"cdek_city_{key}") or "").strip()
+        raw_cdek_delivery_type = (form.get(f"cdek_delivery_type_{key}") or "pickup").strip()
+        cdek_delivery_type = "door" if raw_cdek_delivery_type == "door" else "pickup"
+        cdek_delivery_point = (form.get(f"cdek_delivery_point_{key}") or "").strip()
         selected_date = (form.get(f"delivery_date_{key}") or delivery_date).strip()
         selected_slot = (form.get(f"delivery_slot_choice_{key}") or delivery_slot_choice).strip()
         selected_address = (form.get(f"address_{key}") or checkout_form["address"]).strip()
@@ -404,13 +408,32 @@ async def order_create(request: Request, db: Session = Depends(get_db)):
         if selected_slot not in _seller_slots(seller):
             request.session["cart_error"] = "Выберите доступный временной слот."
             return RedirectResponse(url="/cart/", status_code=303)
-        if bool(option.get("requires_address")) and not selected_address:
+        if selected_method == "partner_delivery":
+            if not cdek_city_code:
+                request.session["cart_error"] = "Выберите город СДЭК и рассчитайте доставку."
+                return RedirectResponse(url="/cart/", status_code=303)
+            if cdek_delivery_type != "door" and not cdek_delivery_point:
+                request.session["cart_error"] = "Выберите пункт выдачи СДЭК."
+                return RedirectResponse(url="/cart/", status_code=303)
+            if cdek_delivery_type == "door" and not selected_address:
+                request.session["cart_error"] = "Для доставки СДЭК до двери нужен адрес."
+                return RedirectResponse(url="/cart/", status_code=303)
+        elif bool(option.get("requires_address")) and not selected_address:
             request.session["cart_error"] = "Для доставки нужен адрес."
             return RedirectResponse(url="/cart/", status_code=303)
         if selected_method == "pickup":
             selected_address = _seller_pickup_address(seller)
 
         group_subtotal = sum(Decimal(effective_product_price(i.product)) * int(i.quantity or 0) for i in group_items if i.product)
+        delivery_fee = Decimal(str(option.get("fee") or 0))
+        cdek_quote = None
+        if selected_method == "partner_delivery":
+            try:
+                cdek_quote = calculate_cdek_delivery_quote(group_items, int(cdek_city_code), cdek_delivery_type)
+                delivery_fee = cdek_quote.delivery_sum
+            except Exception as exc:
+                request.session["cart_error"] = f"СДЭК не рассчитал доставку: {exc}"
+                return RedirectResponse(url="/cart/", status_code=303)
         seller_minimum = _seller_minimum(seller, selected_method)
         if minimum_order_shortage(group_subtotal, seller_minimum) > 0:
             request.session["cart_error"] = minimum_order_message(group_subtotal, seller_minimum)
@@ -425,8 +448,13 @@ async def order_create(request: Request, db: Session = Depends(get_db)):
             "slot": selected_slot,
             "address": selected_address,
             "comment": selected_comment,
-            "delivery_fee": Decimal(str(option.get("fee") or 0)),
+            "delivery_fee": delivery_fee,
             "subtotal": group_subtotal,
+            "cdek_city_code": cdek_city_code,
+            "cdek_city": cdek_city,
+            "cdek_delivery_type": cdek_delivery_type,
+            "cdek_delivery_point": cdek_delivery_point,
+            "cdek_tariff_code": cdek_quote.tariff_code if cdek_quote else None,
         })
 
     coupon = None
@@ -520,7 +548,16 @@ async def order_create(request: Request, db: Session = Depends(get_db)):
             delivery.provider_name = cdek_shipment.provider
             delivery.track_number = cdek_shipment.track_number
             delivery.tracking_url = cdek_shipment.tracking_url
-            delivery.external_id = cdek_shipment.external_id
+            delivery.external_id = (
+                f"CDEK-PENDING:{group['cdek_city_code']}:{group['cdek_delivery_type']}:{group['cdek_delivery_point'] or ''}"
+            )
+            delivery.comment = "\n".join(filter(None, [
+                group["comment"] or "",
+                f"СДЭК: {group['cdek_city'] or group['cdek_city_code']}; "
+                f"{'до двери' if group['cdek_delivery_type'] == 'door' else 'ПВЗ'} "
+                f"{group['cdek_delivery_point'] or group['address'] or ''}; "
+                f"тариф {group['cdek_tariff_code'] or ''}".strip(),
+            ]))
         db.add(delivery)
 
         for item in group["items"]:
