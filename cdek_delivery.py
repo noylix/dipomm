@@ -210,6 +210,16 @@ def cdek_tariff_code(delivery_type: str) -> int:
     return CDEK_DEFAULT_TARIFF_DOOR if delivery_type == "door" else CDEK_DEFAULT_TARIFF_PICKUP
 
 
+def cdek_order_status(entity: dict[str, object]) -> str:
+    statuses = entity.get("statuses") or []
+    if isinstance(statuses, list) and statuses:
+        active_statuses = [status for status in statuses if isinstance(status, dict) and not status.get("deleted")]
+        latest_status = active_statuses[-1] if active_statuses else statuses[-1]
+        if isinstance(latest_status, dict):
+            return str(latest_status.get("code") or latest_status.get("name") or "")
+    return str(entity.get("status") or "")
+
+
 def calculate_cdek_delivery_quote(
     items,
     to_city_code: int,
@@ -284,7 +294,7 @@ def create_cdek_order(
     return CdekOrderRegistration(
         uuid=str(uuid),
         cdek_number=entity.get("cdek_number") or entity.get("number"),
-        status=entity.get("status") or "created",
+        status=cdek_order_status(entity) or "created",
     )
 
 

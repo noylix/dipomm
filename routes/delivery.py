@@ -9,6 +9,7 @@ from cdek_delivery import (
     calculate_cdek_delivery_quote,
     fetch_cdek_delivery_points,
     fetch_cdek_order,
+    cdek_order_status,
     search_cdek_cities,
 )
 from database import get_db
@@ -107,7 +108,7 @@ def delivery_track(track_number: str, request: Request, db: Session = Depends(ge
             entity = cdek_order.get("entity") or cdek_order
             delivery.track_number = str(entity.get("cdek_number") or delivery.track_number or "")
             delivery.external_id = str(entity.get("uuid") or delivery.external_id)
-            delivery.status = str(entity.get("status") or delivery.status or "")
+            delivery.status = cdek_order_status(entity) or delivery.status or ""
             if delivery.track_number:
                 delivery.tracking_url = f"/delivery/track/{delivery.track_number}"
             db.commit()
