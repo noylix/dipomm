@@ -287,6 +287,7 @@ def test_logistics_supports_current_delivery_methods(client):
     from database import SessionLocal
     from logistics import ensure_logistics_shipment
     from models import Delivery, Order, User
+    from yandex_delivery import YANDEX_PROVIDER_NAME, create_test_yandex_shipment
 
     db = SessionLocal()
     try:
@@ -309,6 +310,35 @@ def test_logistics_supports_current_delivery_methods(client):
         assert shipment.provider == "FreshRoute Logistics"
         assert shipment.track_number
         assert shipment.tracking_url == f"/delivery/track/{shipment.track_number}"
+
+        partner_order = Order(
+            user_id=buyer.id,
+            total_price=Decimal("100.00"),
+            status="ready_for_delivery",
+            payment_status="paid",
+            delivery_method="partner_delivery",
+        )
+        db.add(partner_order)
+        db.flush()
+        partner_delivery = Delivery(
+            order_id=partner_order.id,
+            method="partner_delivery",
+            status="ready_for_delivery",
+            provider="Legacy Partner",
+            track_number="FD-OLD-TRACK",
+        )
+        db.add(partner_delivery)
+        db.flush()
+
+        yandex_preview = create_test_yandex_shipment(partner_order)
+        yandex_shipment = ensure_logistics_shipment(partner_order)
+        assert yandex_shipment is partner_delivery
+        assert yandex_shipment.provider == YANDEX_PROVIDER_NAME
+        assert yandex_shipment.provider_name == YANDEX_PROVIDER_NAME
+        assert yandex_shipment.external_id == yandex_preview.external_id
+        assert yandex_shipment.track_number == yandex_preview.track_number
+        assert yandex_shipment.track_number.startswith("YM")
+        assert yandex_shipment.tracking_url == f"/delivery/track/{yandex_shipment.track_number}"
     finally:
         db.rollback()
         db.close()

@@ -2,6 +2,7 @@ import hashlib
 from datetime import datetime
 
 from models import Delivery, Order
+from yandex_delivery import create_test_yandex_shipment, is_yandex_delivery_method
 
 
 LOGISTICS_BY_METHOD = {
@@ -49,6 +50,16 @@ def ensure_logistics_shipment(order: Order) -> Delivery | None:
         return None
 
     method = (order.delivery_method or delivery.method or "courier").strip()
+    if is_yandex_delivery_method(method):
+        shipment = create_test_yandex_shipment(order)
+        delivery.provider = shipment.provider
+        delivery.provider_name = shipment.provider
+        delivery.external_id = shipment.external_id
+        delivery.track_number = shipment.track_number
+        delivery.tracking_url = shipment.tracking_url
+        delivery.status = shipment.status
+        return delivery
+
     config = LOGISTICS_BY_METHOD.get(method)
     if not config:
         delivery.status = delivery.status or "manual"

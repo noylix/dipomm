@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from models import Delivery, Order, User
+from yandex_delivery import create_test_yandex_shipment
 
 
 DELIVERY_METHODS = {"pickup", "farmer_delivery", "partner_delivery"}
@@ -96,10 +97,6 @@ def delivery_option(seller: User | None, method: str, base_minimum: Decimal) -> 
     return None
 
 
-def demo_track_number(order_id: int) -> str:
-    return f"FD-{datetime.utcnow():%Y}-{order_id:06d}"
-
-
 def create_order_delivery(
     order: Order,
     method: str,
@@ -124,9 +121,10 @@ def create_order_delivery(
     if normalized == "pickup":
         delivery.address = seller_pickup_address(seller) or None
     elif normalized == "partner_delivery":
-        delivery.provider = "Демо-партнёр доставки"
-        delivery.provider_name = "Демо-партнёр доставки"
-        delivery.track_number = demo_track_number(order.id)
-        delivery.tracking_url = f"/delivery/track/{delivery.track_number}"
-        delivery.external_id = delivery.track_number
+        yandex_shipment = create_test_yandex_shipment(order)
+        delivery.provider = yandex_shipment.provider
+        delivery.provider_name = yandex_shipment.provider
+        delivery.track_number = yandex_shipment.track_number
+        delivery.tracking_url = yandex_shipment.tracking_url
+        delivery.external_id = yandex_shipment.external_id
     return delivery

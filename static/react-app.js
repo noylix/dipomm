@@ -2528,7 +2528,7 @@
                             required: true,
                             maxLength: 500
                         }) : null,
-                        active && option.method === "partner_delivery" ? h("p", { className: "react-muted react-checkout-method-note" }, "\u041f\u043e\u0441\u043b\u0435 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f \u0431\u0443\u0434\u0435\u0442 \u0441\u043e\u0437\u0434\u0430\u043d \u0434\u0435\u043c\u043e-\u0442\u0440\u0435\u043a-\u043d\u043e\u043c\u0435\u0440 \u043f\u0430\u0440\u0442\u043d\u0451\u0440\u0441\u043a\u043e\u0439 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438.") : null,
+                        active && option.method === "partner_delivery" ? h("p", { className: "react-muted react-checkout-method-note" }, "\u0422\u0435\u0441\u0442\u043e\u0432\u0430\u044f \u042f\u043d\u0434\u0435\u043a\u0441 \u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0441\u043e\u0437\u0434\u0430\u0441\u0442 \u0434\u0435\u043c\u043e-\u0442\u0440\u0435\u043a \u043f\u043e\u0441\u043b\u0435 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u044f.") : null,
                         active && optionDelivery && option.comment ? h("p", { className: "react-muted react-checkout-method-note" }, option.comment) : null
                     ]);
                 })) : h("div", { className: "react-cart-min-order-warning" }, "\u0423 \u043f\u0440\u043e\u0434\u0430\u0432\u0446\u0430 \u043d\u0435 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u044b \u0441\u043f\u043e\u0441\u043e\u0431\u044b \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f."),

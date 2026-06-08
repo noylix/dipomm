@@ -54,6 +54,7 @@ from order_statuses import (
     is_order_receivable,
     normalize_order_status,
 )
+from yandex_delivery import create_test_yandex_shipment
 
 router = APIRouter(prefix="/order", tags=["order"])
 
@@ -151,10 +152,6 @@ def _delivery_option(seller: User | None, method: str) -> dict[str, object] | No
         if option["method"] == method:
             return option
     return None
-
-
-def _demo_track_number(order_id: int) -> str:
-    return f"FD-{datetime.utcnow():%Y}-{order_id:06d}"
 
 
 def _set_order_paid(order: Order, payment_id: str | None = None) -> None:
@@ -518,11 +515,12 @@ async def order_create(request: Request, db: Session = Depends(get_db)):
         if group["method"] == "pickup":
             delivery.address = _seller_pickup_address(group["seller"]) or None
         elif group["method"] == "partner_delivery":
-            delivery.provider = "Демо-партнёр доставки"
-            delivery.provider_name = "Демо-партнёр доставки"
-            delivery.track_number = _demo_track_number(order.id)
-            delivery.tracking_url = f"/delivery/track/{delivery.track_number}"
-            delivery.external_id = delivery.track_number
+            yandex_shipment = create_test_yandex_shipment(order)
+            delivery.provider = yandex_shipment.provider
+            delivery.provider_name = yandex_shipment.provider
+            delivery.track_number = yandex_shipment.track_number
+            delivery.tracking_url = yandex_shipment.tracking_url
+            delivery.external_id = yandex_shipment.external_id
         db.add(delivery)
 
         for item in group["items"]:
